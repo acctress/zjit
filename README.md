@@ -28,6 +28,9 @@ pub fn main() !void {
 }
 ```
 
+Check out tests/examples in `src/root.zig` to see how zjit works!
+And don't forget to run `zig build test` to ensure zjit hasn't broken.
+
 # Resources & Links Used
 * [VirtualAlloc](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
 * [VirtualFree](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree)

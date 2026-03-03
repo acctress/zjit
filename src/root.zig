@@ -323,13 +323,11 @@ test "move reg from mem" {
     var emitter: Emitter = try .init(allocator, 1024);
     defer emitter.deinit();
 
-    try emitter.push(.rbp);
-    try emitter.mov_reg_reg(.rbp, .rsp);
+    try emitter.enter(16);
     try emitter.mov_reg_imm64(.rax, 42);
-    try emitter.push(.rax);
+    try emitter.mov_mem_reg(.rbp, -8, .rax);
     try emitter.mov_reg_mem(.rax, .rbp, -8);
-    try emitter.mov_reg_reg(.rsp, .rbp);
-    try emitter.pop(.rbp);
+    try emitter.leave();
     try emitter.ret();
 
     const f = try emitter.commit(*const fn () callconv(.c) i64);
@@ -348,13 +346,11 @@ test "move mem from reg" {
     var emitter: Emitter = try .init(allocator, 1024);
     defer emitter.deinit();
 
-    try emitter.push(.rbp);
-    try emitter.mov_reg_reg(.rbp, .rsp);
+    try emitter.enter(16);
     try emitter.mov_reg_imm64(.rcx, 1337);
     try emitter.mov_mem_reg(.rbp, -8, .rcx); // store into mem
     try emitter.mov_reg_mem(.rax, .rbp, -8); // read from mem
-    try emitter.mov_reg_reg(.rsp, .rbp);
-    try emitter.pop(.rbp);
+    try emitter.leave();
     try emitter.ret();
 
     const f = try emitter.commit(*const fn () callconv(.c) i64);

@@ -2,6 +2,7 @@ const std = @import("std");
 const ExecBuffer = @import("buffer.zig").ExecBuffer;
 const regs = @import("regs.zig");
 const encode = @import("encode.zig").encode;
+const builtin = @import("builtin");
 
 const Register = regs.Register;
 
@@ -306,6 +307,22 @@ pub const Emitter = struct {
         try self.mov_reg_imm64(.rax, @as(i64, @intCast(@intFromPtr(fptr))));
         try self.buffer.writeBytes(&[_]u8{ 0xFF, 0xD0 }); // modrm hardcoded in as it always uses rax
         try self.add_reg_imm32(.rsp, 8);
+    }
+
+    pub fn enter(self: *Emitter, size: usize) !void {
+        // alignment
+        const alignmed = (size + 15) & ~@as(usize, 15);
+        try self.push(.rbp);
+        try self.mov_reg_reg(.rbp, .rsp);
+        try self.sub_reg_imm32(
+            .rsp,
+            if (comptime builtin.os.tag == .windows) @as(i32, @intCast(alignmed)) + 32 else @as(i32, @intCast(alignmed)),
+        );
+    }
+
+    pub fn leave(self: *Emitter) !void {
+        try self.mov_reg_reg(.rsp, .rbp);
+        try self.pop(.rbp);
     }
 
     pub fn and_reg_reg(self: *Emitter, dest: Register, src: Register) !void {

@@ -23,7 +23,7 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_imm64(self: *Emitter, reg: Register, imm: i64) !void {
-        std.debug.print("+ mov_reg_imm64(reg = {s}, imm = {})\n", .{ @tagName(reg), imm });
+        // std.debug.print("+ mov_reg_imm64(reg = {s}, imm = {})\n", .{ @tagName(reg), imm });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, .rax, reg),
@@ -34,7 +34,7 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("+ mov_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+        // std.debug.print("+ mov_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
@@ -44,7 +44,7 @@ pub const Emitter = struct {
     }
 
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("+ add_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+        // std.debug.print("+ add_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
@@ -54,7 +54,7 @@ pub const Emitter = struct {
     }
 
     pub fn sub_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("+ sub_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+        // std.debug.print("+ sub_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
@@ -64,7 +64,7 @@ pub const Emitter = struct {
     }
 
     pub fn imul_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("+ imul_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+        // std.debug.print("+ imul_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, dest, src),

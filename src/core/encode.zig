@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const regs = @import("regs.zig");
 const Register = regs.Register;
 
@@ -14,8 +12,6 @@ pub const encode = struct {
     }
 
     pub fn modrm(reg: Register, rm: Register) u8 {
-        std.debug.print("   * modrm(reg = {s}, rm = {s})\n", .{ @tagName(reg), @tagName(rm) });
-
         var byte: u8 = 0xC0;
         byte |= @as(u8, reg.enc()) << 3;
         byte |= @as(u8, rm.enc());

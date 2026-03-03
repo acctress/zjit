@@ -118,3 +118,73 @@ test "countdown from one hundred to zero and return the num of iterations" {
 
     try std.testing.expectEqual(100, result);
 }
+
+test "push n pop" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rbx, 78);
+    try emitter.push(.rbx);
+    try emitter.pop(.rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(78, result);
+}
+
+fn number_gen() callconv(.c) i64 {
+    return 420;
+}
+
+test "call and return" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.call(&number_gen);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(420, result);
+}
+
+fn print_num_and_return() callconv(.c) i64 {
+    const std = @import("std");
+    const num = 420;
+    std.debug.print("{d}\n", .{num});
+    return num;
+}
+
+test "call a dynamic function and return" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.call(&print_num_and_return);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(420, result);
+}

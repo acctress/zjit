@@ -65,8 +65,6 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_imm64(self: *Emitter, reg: Register, imm: i64) !void {
-        // std.debug.print("+ mov_reg_imm64(reg = {s}, imm = {})\n", .{ @tagName(reg), imm });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, .rax, reg),
             0xB8 + @as(u8, reg.enc()),
@@ -76,8 +74,6 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        // std.debug.print("+ mov_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x89,
@@ -86,8 +82,6 @@ pub const Emitter = struct {
     }
 
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("+ add_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x01,
@@ -96,8 +90,6 @@ pub const Emitter = struct {
     }
 
     pub fn add_reg_imm32(self: *Emitter, dest: Register, imm: i32) !void {
-        std.debug.print("+ add_reg_imm32(dest = {s}, imm = {})\n", .{ @tagName(dest), imm });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, .rax, dest), 0x81, 0xC0 | (0 << 3) | @as(u8, dest.enc()),
         });
@@ -106,8 +98,6 @@ pub const Emitter = struct {
     }
 
     pub fn sub_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        // std.debug.print("+ sub_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x29,
@@ -115,9 +105,15 @@ pub const Emitter = struct {
         });
     }
 
-    pub fn imul_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        // std.debug.print("+ imul_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+    pub fn sub_reg_imm32(self: *Emitter, dest: Register, imm: i32) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, dest), 0x81, 0xC0 | (5 << 3) | @as(u8, dest.enc()),
+        });
 
+        try self.buffer.writeImm(i32, imm);
+    }
+
+    pub fn imul_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, dest, src),
             0x0F,
@@ -127,7 +123,6 @@ pub const Emitter = struct {
     }
 
     pub fn ret(self: *Emitter) !void {
-        std.debug.print("+ ret\n", .{});
         try self.buffer.writeByte(0xC3);
     }
 
@@ -247,8 +242,6 @@ pub const Emitter = struct {
     }
 
     pub fn cmp_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        // std.debug.print("+ cmp_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x3B,
@@ -257,8 +250,6 @@ pub const Emitter = struct {
     }
 
     pub fn cmp_reg_imm32(self: *Emitter, reg: Register, imm: i32) !void {
-        // std.debug.print("+ cmp_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, .rax, reg), 0x81, 0xC0 | (7 << 3) | @as(u8, reg.enc()),
         });
@@ -272,5 +263,28 @@ pub const Emitter = struct {
             0xFF,
             0xC0 | (1 << 3) | @as(u8, reg.enc()),
         });
+    }
+
+    pub fn push(self: *Emitter, reg: Register) !void {
+        if (reg.ext()) try self.buffer.writeByte(encode.rex(false, .rax, reg));
+        try self.buffer.writeBytes(&[_]u8{
+            0xFF,
+            0xC0 | (6 << 3) | @as(u8, reg.enc()),
+        });
+    }
+
+    pub fn pop(self: *Emitter, reg: Register) !void {
+        if (reg.ext()) try self.buffer.writeByte(encode.rex(false, .rax, reg));
+        try self.buffer.writeBytes(&[_]u8{
+            0x8F,
+            0xC0 | (0 << 3) | @as(u8, reg.enc()),
+        });
+    }
+
+    pub fn call(self: *Emitter, fptr: anytype) !void {
+        try self.sub_reg_imm32(.rsp, 8);
+        try self.mov_reg_imm64(.rax, @as(i64, @intCast(@intFromPtr(fptr))));
+        try self.buffer.writeBytes(&[_]u8{ 0xFF, 0xD0 }); // modrm hardcoded in as it always uses rax
+        try self.add_reg_imm32(.rsp, 8);
     }
 };

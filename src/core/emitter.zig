@@ -5,21 +5,63 @@ const encode = @import("encode.zig").encode;
 
 const Register = regs.Register;
 
-pub const Emitter = struct {
-    buffer: ExecBuffer,
+const Label = struct {
+    target: ?usize,
+    fixups: std.ArrayList(usize),
+};
 
-    pub fn init(size: usize) !Emitter {
+pub const Emitter = struct {
+    allocator: std.mem.Allocator,
+    buffer: ExecBuffer,
+    labels: std.ArrayList(Label),
+
+    pub fn init(allocator: std.mem.Allocator, size: usize) !Emitter {
         return .{
+            .allocator = allocator,
             .buffer = try .init(size),
+            .labels = .empty,
         };
     }
 
     pub fn deinit(self: *Emitter) void {
         self.buffer.deinit();
+
+        for (self.labels.items) |*i| {
+            i.fixups.deinit(self.allocator);
+        }
+
+        self.labels.deinit(self.allocator);
     }
 
     pub fn commit(self: *Emitter, comptime F: type) !F {
         return self.buffer.commit(F);
+    }
+
+    pub fn label(self: *Emitter) !usize {
+        const l: Label = .{
+            .target = null,
+            .fixups = .empty,
+        };
+
+        try self.labels.append(self.allocator, l);
+        return self.labels.items.len - 1;
+    }
+
+    pub fn bind(self: *Emitter, label_idx: usize) !void {
+        self.labels.items[label_idx].target = self.buffer.writePos;
+
+        for (self.labels.items[label_idx].fixups.items) |f| {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(f)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[f..][0..4],
+                offset,
+                .little,
+            );
+        }
     }
 
     pub fn mov_reg_imm64(self: *Emitter, reg: Register, imm: i64) !void {
@@ -44,13 +86,23 @@ pub const Emitter = struct {
     }
 
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        // std.debug.print("+ add_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+        std.debug.print("+ add_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
 
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x01,
             encode.modrm(src, dest),
         });
+    }
+
+    pub fn add_reg_imm32(self: *Emitter, dest: Register, imm: i32) !void {
+        std.debug.print("+ add_reg_imm32(dest = {s}, imm = {})\n", .{ @tagName(dest), imm });
+
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, dest), 0x81, 0xC0 | (0 << 3) | @as(u8, dest.enc()),
+        });
+
+        try self.buffer.writeImm(i32, imm);
     }
 
     pub fn sub_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
@@ -77,5 +129,148 @@ pub const Emitter = struct {
     pub fn ret(self: *Emitter) !void {
         std.debug.print("+ ret\n", .{});
         try self.buffer.writeByte(0xC3);
+    }
+
+    pub fn jmp(self: *Emitter, label_idx: usize) !void {
+        try self.buffer.writeByte(0xE9);
+        const fix_pos = self.buffer.writePos;
+
+        if (self.labels.items[label_idx].target != null) {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(fix_pos)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[fix_pos..][0..4],
+                offset,
+                .little,
+            );
+
+            self.buffer.writePos += 4;
+        } else {
+            try self.buffer.writeImm(i32, 0);
+            try self.labels.items[label_idx].fixups.append(self.allocator, fix_pos);
+        }
+    }
+
+    pub fn jz(self: *Emitter, label_idx: usize) !void {
+        try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x84 });
+        const fix_pos = self.buffer.writePos;
+
+        if (self.labels.items[label_idx].target != null) {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(fix_pos)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[fix_pos..][0..4],
+                offset,
+                .little,
+            );
+
+            self.buffer.writePos += 4;
+        } else {
+            try self.buffer.writeImm(i32, 0);
+            try self.labels.items[label_idx].fixups.append(self.allocator, fix_pos);
+        }
+    }
+
+    pub fn jnz(self: *Emitter, label_idx: usize) !void {
+        try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x85 });
+        const fix_pos = self.buffer.writePos;
+
+        if (self.labels.items[label_idx].target != null) {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(fix_pos)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[fix_pos..][0..4],
+                offset,
+                .little,
+            );
+
+            self.buffer.writePos += 4;
+        } else {
+            try self.buffer.writeImm(i32, 0);
+            try self.labels.items[label_idx].fixups.append(self.allocator, fix_pos);
+        }
+    }
+
+    pub fn jl(self: *Emitter, label_idx: usize) !void {
+        try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x8C });
+        const fix_pos = self.buffer.writePos;
+
+        if (self.labels.items[label_idx].target != null) {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(fix_pos)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[fix_pos..][0..4],
+                offset,
+                .little,
+            );
+
+            self.buffer.writePos += 4;
+        } else {
+            try self.buffer.writeImm(i32, 0);
+            try self.labels.items[label_idx].fixups.append(self.allocator, fix_pos);
+        }
+    }
+
+    pub fn jge(self: *Emitter, label_idx: usize) !void {
+        try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x8D });
+        const fix_pos = self.buffer.writePos;
+
+        if (self.labels.items[label_idx].target != null) {
+            const offset: i32 = @intCast(
+                @as(i64, @intCast(self.labels.items[label_idx].target.?)) - (@as(i64, @intCast(fix_pos)) + 4),
+            );
+
+            std.mem.writeInt(
+                i32,
+                self.buffer.mem[fix_pos..][0..4],
+                offset,
+                .little,
+            );
+
+            self.buffer.writePos += 4;
+        } else {
+            try self.buffer.writeImm(i32, 0);
+            try self.labels.items[label_idx].fixups.append(self.allocator, fix_pos);
+        }
+    }
+
+    pub fn cmp_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
+        // std.debug.print("+ cmp_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, src, dest),
+            0x3B,
+            encode.modrm(src, dest),
+        });
+    }
+
+    pub fn cmp_reg_imm32(self: *Emitter, reg: Register, imm: i32) !void {
+        // std.debug.print("+ cmp_reg_reg(src = {s}, dest = {s})\n", .{ @tagName(src), @tagName(dest) });
+
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg), 0x81, 0xC0 | (7 << 3) | @as(u8, reg.enc()),
+        });
+
+        try self.buffer.writeImm(i32, imm);
+    }
+
+    pub fn dec_reg(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xFF,
+            0xC0 | (1 << 3) | @as(u8, reg.enc()),
+        });
     }
 };

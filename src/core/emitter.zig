@@ -287,4 +287,52 @@ pub const Emitter = struct {
         try self.buffer.writeBytes(&[_]u8{ 0xFF, 0xD0 }); // modrm hardcoded in as it always uses rax
         try self.add_reg_imm32(.rsp, 8);
     }
+
+    pub fn and_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, src, dest),
+            0x21,
+            encode.modrm(src, dest),
+        });
+    }
+
+    pub fn or_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, src, dest),
+            0x09,
+            encode.modrm(src, dest),
+        });
+    }
+
+    pub fn xor_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, src, dest),
+            0x31,
+            encode.modrm(src, dest),
+        });
+    }
+
+    pub fn not_reg(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xF7,
+            0xC0 | (2 << 3) | @as(u8, reg.enc()),
+        });
+    }
+
+    pub fn shl_reg(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xD3,
+            0xC0 | (4 << 3) | @as(u8, reg.enc()),
+        });
+    }
+
+    pub fn shr_reg(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xD3,
+            0xC0 | (5 << 3) | @as(u8, reg.enc()),
+        });
+    }
 };

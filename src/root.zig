@@ -188,3 +188,127 @@ test "call a dynamic function and return" {
 
     try std.testing.expectEqual(420, result);
 }
+
+test "zero rax register with xor" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 42);
+    try emitter.xor_reg_reg(.rax, .rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(0, result);
+}
+
+test "and of 0b1100 AND 0b1010" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 0b1100);
+    try emitter.mov_reg_imm64(.rcx, 0b1010);
+    try emitter.and_reg_reg(.rax, .rcx);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(0b1000, result);
+}
+
+test "or of 0b1100 AND 0b1010" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 0b1100);
+    try emitter.mov_reg_imm64(.rcx, 0b1010);
+    try emitter.or_reg_reg(.rax, .rcx);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(0b1110, result);
+}
+
+test "not of 0" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 0);
+    try emitter.not_reg(.rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(-1, result);
+}
+
+test "shift one left two times" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rcx, 2);
+    try emitter.mov_reg_imm64(.rax, 1);
+    try emitter.shl_reg(.rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(4, result);
+}
+
+test "shift eight right two times" {
+    const std = @import("std");
+
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rcx, 2);
+    try emitter.mov_reg_imm64(.rax, 8);
+    try emitter.shr_reg(.rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(2, result);
+}

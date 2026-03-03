@@ -42,7 +42,11 @@ const zjit = @import("zjit");
 const builtin = @import("builtin");
 
 pub fn main() !void {
-    var emitter: zjit.Emitter = try .init(1024);
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
     defer emitter.deinit();
 
     if (comptime builtin.os.tag == .windows) {

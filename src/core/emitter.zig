@@ -81,6 +81,26 @@ pub const Emitter = struct {
         });
     }
 
+    pub fn mov_reg_mem(self: *Emitter, dest: Register, base: Register, offset: i32) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, dest, base),
+            0x8B,
+            0x80 | @as(u8, dest.enc()) << 3 | @as(u8, base.enc()),
+        });
+
+        try self.buffer.writeImm(i32, offset);
+    }
+
+    pub fn mov_mem_reg(self: *Emitter, base: Register, offset: i32, src: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, src, base),
+            0x89,
+            0x80 | @as(u8, src.enc()) << 3 | @as(u8, base.enc()),
+        });
+
+        try self.buffer.writeImm(i32, offset);
+    }
+
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),

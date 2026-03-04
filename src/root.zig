@@ -406,3 +406,33 @@ test "test memory with rsp as the base" {
 
     try std.testing.expectEqual(42, result);
 }
+
+fn print_count(count: i64) callconv(.c) void {
+    std.debug.print("{d}\n", .{count});
+}
+
+test "count down from 10 to 0 and print the current number" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    const loop_start = try emitter.label();
+
+    try emitter.mov_reg_imm64(.rcx, 10);
+    try emitter.bind(loop_start);
+    try emitter.push(.rcx);
+    try emitter.call(&print_count);
+    try emitter.pop(.rcx);
+    try emitter.dec_reg(.rcx);
+    try emitter.jnz(loop_start);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    // expect nothing cuz we dont care
+    try std.testing.expectEqual(0, result);
+}

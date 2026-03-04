@@ -375,7 +375,7 @@ pub const Emitter = struct {
 
     pub fn cqo(self: *Emitter) !void {
         try self.buffer.writeBytes(&[_]u8{
-            0x48, // no ops so lets just hardcode rex, i should really refactor the rex function to be more flexible
+            encode.REX_NO_OPS,
             0x99,
         });
     }

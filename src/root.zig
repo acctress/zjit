@@ -348,3 +348,61 @@ test "twenty divided by four, expect five" {
 
     try std.testing.expectEqual(5, result);
 }
+
+test "quick neg" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 42);
+    try emitter.neg(.rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(-42, result);
+}
+
+test "move 32-bit immediate to memory" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.enter(16);
+    try emitter.mov_mem_imm32(.rbp, -8, 999);
+    try emitter.mov_reg_mem(.rax, .rbp, -8);
+    try emitter.leave();
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(999, result);
+}
+
+test "test memory with rsp as the base" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.sub_reg_imm32(.rsp, 8);
+    try emitter.mov_mem_imm32(.rsp, 0, 42);
+    try emitter.mov_reg_mem(.rax, .rsp, 0);
+    try emitter.add_reg_imm32(.rsp, 8);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(42, result);
+}

@@ -89,6 +89,11 @@ pub const Emitter = struct {
             0x80 | @as(u8, dest.enc()) << 3 | @as(u8, base.enc()),
         });
 
+        if (base == .rsp) {
+            // emit a sib byte if we're using rsp as the base register
+            try self.buffer.writeByte(0x24);
+        }
+
         try self.buffer.writeImm(i32, offset);
     }
 
@@ -99,7 +104,29 @@ pub const Emitter = struct {
             0x80 | @as(u8, src.enc()) << 3 | @as(u8, base.enc()),
         });
 
+        if (base == .rsp) {
+            // emit a sib byte if we're using rsp as the base register
+            try self.buffer.writeByte(0x24);
+        }
+
         try self.buffer.writeImm(i32, offset);
+    }
+
+    /// Move imm32 sign extended to 64-bits to r/m64.
+    pub fn mov_mem_imm32(self: *Emitter, base: Register, offset: i32, imm: i32) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, base),
+            0xC7,
+            0x80 | @as(u8, base.enc()),
+        });
+
+        if (base == .rsp) {
+            // emit a sib byte if we're using rsp as the base register
+            try self.buffer.writeByte(0x24);
+        }
+
+        try self.buffer.writeImm(i32, offset);
+        try self.buffer.writeImm(i32, imm);
     }
 
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
@@ -385,6 +412,15 @@ pub const Emitter = struct {
             encode.rex(true, .rax, reg),
             0xF7,
             0xC0 | (7 << 3) | @as(u8, reg.enc()),
+        });
+    }
+
+    /// Two's complement negate r/m64.
+    pub fn neg(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xF7,
+            0xC0 | (3 << 3) | @as(u8, reg.enc()),
         });
     }
 };

@@ -436,3 +436,32 @@ test "count down from 10 to 0 and print the current number" {
     // expect nothing cuz we dont care
     try std.testing.expectEqual(0, result);
 }
+
+// message needs to be sentinel so std.debug.print knows where to end
+fn print_message(message: [*:0]const u8) callconv(.c) void {
+    std.debug.print("{s}\n", .{message});
+}
+
+test "load a string pointer into memory and return it" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    const str: []const u8 = "hellooo\x00";
+
+    try emitter.sub_reg_imm32(.rsp, 40); // setup stack frame
+    try emitter.mov_reg_imm64(.rcx, @as(i64, @intCast(@intFromPtr(str.ptr))));
+    try emitter.call(&print_message);
+    try emitter.add_reg_imm32(.rsp, 40);
+    try emitter.xor_reg_reg(.rax, .rax);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    // expect nothing cuz we dont care
+    try std.testing.expectEqual(0, result);
+}

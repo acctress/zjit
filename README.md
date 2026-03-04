@@ -2,22 +2,7 @@
 A x86-64 JIT assembler in Zig for Linux and Windows, call machine code as a native function.
 
 # Features
-Supported instructions:
-- mov
-- add
-- sub
-- imul
-- ret
-- jmp
-- jz
-- jnz
-- jl
-- jge
-- cmp
-- dec
-- push
-- pop
-- call
+Supported instructions: `mov, add, sub, imul, idiv, ret, jmp, jz, jnz, jl, jge, cmp, dec, push, pop, call`
 
 Calling a user defined Zig function is this simple:
 ```zig

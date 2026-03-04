@@ -1,10 +1,10 @@
+const std = @import("std");
+
 pub const Emitter = @import("core/emitter.zig").Emitter;
 pub const Register = @import("core/regs.zig").Register;
 pub const Encode = @import("core/encode.zig").encode;
 
 test "mov immediate and ret" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -22,8 +22,6 @@ test "mov immediate and ret" {
 }
 
 test "sub two values in registers" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -43,7 +41,6 @@ test "sub two values in registers" {
 }
 
 test "add two numbers from caller" {
-    const std = @import("std");
     const builtin = @import("builtin");
 
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -70,8 +67,6 @@ test "add two numbers from caller" {
 }
 
 test "jump over an instruction so it never runs" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -94,8 +89,6 @@ test "jump over an instruction so it never runs" {
 }
 
 test "countdown from one hundred to zero and return the num of iterations" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -120,8 +113,6 @@ test "countdown from one hundred to zero and return the num of iterations" {
 }
 
 test "push n pop" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -145,8 +136,6 @@ fn number_gen() callconv(.c) i64 {
 }
 
 test "call and return" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -164,15 +153,12 @@ test "call and return" {
 }
 
 fn print_num_and_return() callconv(.c) i64 {
-    const std = @import("std");
     const num = 420;
     std.debug.print("{d}\n", .{num});
     return num;
 }
 
 test "call a dynamic function and return" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -190,8 +176,6 @@ test "call a dynamic function and return" {
 }
 
 test "zero rax register with xor" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -210,8 +194,6 @@ test "zero rax register with xor" {
 }
 
 test "and of 0b1100 AND 0b1010" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -231,8 +213,6 @@ test "and of 0b1100 AND 0b1010" {
 }
 
 test "or of 0b1100 AND 0b1010" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -252,8 +232,6 @@ test "or of 0b1100 AND 0b1010" {
 }
 
 test "not of 0" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -272,8 +250,6 @@ test "not of 0" {
 }
 
 test "shift one left two times" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -293,8 +269,6 @@ test "shift one left two times" {
 }
 
 test "shift eight right two times" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -314,8 +288,6 @@ test "shift eight right two times" {
 }
 
 test "move reg from mem" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -337,8 +309,6 @@ test "move reg from mem" {
 }
 
 test "move mem from reg" {
-    const std = @import("std");
-
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -357,4 +327,24 @@ test "move mem from reg" {
     const result = f();
 
     try std.testing.expectEqual(1337, result);
+}
+
+test "twenty divided by four, expect five" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    try emitter.mov_reg_imm64(.rax, 20);
+    try emitter.mov_reg_imm64(.rcx, 4);
+    try emitter.cqo();
+    try emitter.idiv(.rcx);
+    try emitter.ret();
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(5, result);
 }

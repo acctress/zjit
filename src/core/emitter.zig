@@ -372,4 +372,19 @@ pub const Emitter = struct {
             0xC0 | (5 << 3) | @as(u8, reg.enc()),
         });
     }
+
+    pub fn cqo(self: *Emitter) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            0x48, // no ops so lets just hardcode rex, i should really refactor the rex function to be more flexible
+            0x99,
+        });
+    }
+
+    pub fn idiv(self: *Emitter, reg: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, .rax, reg),
+            0xF7,
+            0xC0 | (7 << 3) | @as(u8, reg.enc()),
+        });
+    }
 };

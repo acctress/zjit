@@ -58,6 +58,43 @@ const f = try emitter.commit(*const fn () callconv(.c) i64);
 const result = f(); // = 127
 ```
 
+Here is another example, check if a number is nonzero - return 1 for true and 0 for false.
+
+C equivalent:
+```c
+int is_nonzero(int n) {
+    if (n != 0) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+```
+
+zjit IR:
+```zig
+var function: IR.Function = try .init(allocator);
+
+{
+    const entry = try function.createBlock(&[_]IR.Type{.i64});
+    const v0 = entry.param(0);
+    try function.brif(v0, 1, 2);
+
+    // true
+    _ = try function.createBlock(&[_]IR.Type{});
+    const v_true = try function.iconst(1);
+    try function.ret(v_true);
+
+    // false
+    _ = try function.createBlock(&[_]IR.Type{});
+    const v_false = try function.iconst(0);
+    try function.ret(v_false);
+}
+
+var code_gen: CodeGen = .init(allocator, &emitter);
+try code_gen.compile(&function);
+```
+
 ### Calling a Zig function
 ```zig
 fn hello() callconv(.c) i64 {

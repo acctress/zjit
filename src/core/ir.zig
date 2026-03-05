@@ -13,12 +13,16 @@ pub const IR = struct {
     pub const InstType = enum {
         iconst,
         iadd,
+        brif,
+        jmp,
         ret,
     };
 
     pub const Inst = union(InstType) {
         iconst: i64,
         iadd: struct { lhs: Value, rhs: Value },
+        brif: struct { condition: Value, true_block: usize, false_block: usize },
+        jmp: struct { to_block: usize },
         ret: struct { value: Value },
     };
 
@@ -98,7 +102,10 @@ pub const IR = struct {
         }
 
         pub fn iadd(self: *Function, lhs: Value, rhs: Value) !u32 {
-            const inst: Inst = .{ .iadd = .{ .lhs = lhs, .rhs = rhs } };
+            const inst: Inst = .{ .iadd = .{
+                .lhs = lhs,
+                .rhs = rhs,
+            } };
 
             try self.blocks.items[
                 self.blocks.items.len - 1
@@ -107,6 +114,30 @@ pub const IR = struct {
             try self.types.append(self.allocator, .i64);
 
             return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn brif(self: *Function, condition: Value, true_block: usize, false_block: usize) !void {
+            const inst: Inst = .{
+                .brif = .{
+                    .condition = condition,
+                    .true_block = true_block,
+                    .false_block = false_block,
+                },
+            };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+        }
+
+        pub fn jmp(self: *Function, to_block: usize) !void {
+            const inst: Inst = .{ .jmp = .{
+                .to_block = to_block,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
         }
 
         pub fn ret(self: *Function, value: Value) !void {

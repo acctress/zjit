@@ -533,3 +533,38 @@ test "call ir function with params and pass args" {
 
     try std.testing.expectEqual(result, 20);
 }
+
+test "function return 1 if arg is not zero else return 0" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var function: IR.Function = try .init(allocator);
+
+    {
+        const entry = try function.createBlock(&[_]IR.Type{.i64});
+        const v0 = entry.param(0);
+        try function.brif(v0, 1, 2);
+
+        // true
+        _ = try function.createBlock(&[_]IR.Type{});
+        const v_true = try function.iconst(1);
+        try function.ret(v_true);
+
+        // false
+        _ = try function.createBlock(&[_]IR.Type{});
+        const v_false = try function.iconst(0);
+        try function.ret(v_false);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
+
+    const f = try emitter.commit(*const fn (i64) callconv(.c) i64);
+
+    try std.testing.expectEqual(1, f(1));
+    try std.testing.expectEqual(0, f(0));
+}

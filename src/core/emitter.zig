@@ -6,7 +6,7 @@ const builtin = @import("builtin");
 
 const Register = regs.Register;
 
-const Label = struct {
+pub const Label = struct {
     target: ?usize,
     fixups: std.ArrayList(usize),
 };

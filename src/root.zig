@@ -468,16 +468,16 @@ test "load a string pointer into memory and return it" {
     try std.testing.expectEqual(0, result);
 }
 
-test "simple ir function" {
+test "ir function with params" {
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
 
     var function: IR.Function = try .init(allocator);
 
-    try function.createBlock();
-    const v0 = try function.iconst(42);
-    const v1 = try function.iconst(85);
+    const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+    const v0 = block.param(0);
+    const v1 = block.param(1);
     const v2 = try function.iadd(v0, v1);
     try function.ret(v2);
 
@@ -494,17 +494,42 @@ test "compile ir adder function" {
 
     var adder: IR.Function = try .init(allocator);
 
-    try adder.createBlock();
+    _ = try adder.createBlock(&[_]IR.Type{});
     const v0 = try adder.iconst(42);
     const v1 = try adder.iconst(85);
     const v2 = try adder.iadd(v0, v1);
     try adder.ret(v2);
 
-    var code_gen: CodeGen = .init(&emitter);
+    var code_gen: CodeGen = .init(allocator, &emitter);
     try code_gen.compile(&adder);
 
     const f = try emitter.commit(*const fn () callconv(.c) i64);
     const result = f();
 
     try std.testing.expectEqual(127, result);
+}
+
+test "call ir function with params and pass args" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var function: IR.Function = try .init(allocator);
+
+    const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+    const v0 = block.param(0);
+    const v1 = block.param(1);
+    const v2 = try function.iadd(v0, v1);
+    try function.ret(v2);
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
+
+    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+    const result = f(10, 10);
+
+    try std.testing.expectEqual(result, 20);
 }

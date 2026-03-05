@@ -23,19 +23,30 @@ pub const IR = struct {
     };
 
     pub const BasicBlock = struct {
+        parameters: []const Type,
         instructions: std.ArrayList(Inst),
+    };
+
+    pub const Block = struct {
+        params: []u32,
+
+        pub fn param(self: Block, idx: usize) u32 {
+            return self.params[idx];
+        }
     };
 
     pub const Function = struct {
         allocator: std.mem.Allocator,
         blocks: std.ArrayList(BasicBlock),
         types: std.ArrayList(Type),
+        param_indices: std.ArrayList([]u32),
 
         pub fn init(allocator: std.mem.Allocator) !Function {
             return .{
                 .allocator = allocator,
                 .blocks = .empty,
                 .types = .empty,
+                .param_indices = .empty,
             };
         }
 
@@ -44,13 +55,34 @@ pub const IR = struct {
                 b.instructions.deinit(self.allocator);
             }
 
+            for (self.param_indices.items) |i| {
+                self.allocator.free(i);
+            }
+
             self.blocks.deinit(self.allocator);
             self.types.deinit(self.allocator);
         }
 
-        pub fn createBlock(self: *Function) !void {
-            const block: BasicBlock = .{ .instructions = .empty };
+        pub fn createBlock(self: *Function, params: []const Type) !Block {
+            const block: BasicBlock = .{
+                .instructions = .empty,
+                .parameters = params,
+            };
+
+            var indices: std.ArrayList(u32) = .empty;
+            for (block.parameters) |t| {
+                try self.types.append(self.allocator, t);
+                try indices.append(self.allocator, @as(u32, @intCast(self.types.items.len - 1)));
+            }
+
+            const owned = try indices.toOwnedSlice(self.allocator);
+            try self.param_indices.append(self.allocator, owned);
+
             try self.blocks.append(self.allocator, block);
+
+            return .{
+                .params = owned,
+            };
         }
 
         pub fn iconst(self: *Function, imm: i64) !u32 {

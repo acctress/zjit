@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Emitter = @import("core/emitter.zig").Emitter;
 pub const Register = @import("core/regs.zig").Register;
 pub const Encode = @import("core/encode.zig").encode;
+pub const IR = @import("core/ir.zig").IR;
 
 test "mov immediate and ret" {
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -464,4 +465,20 @@ test "load a string pointer into memory and return it" {
 
     // expect nothing cuz we dont care
     try std.testing.expectEqual(0, result);
+}
+
+test "simple ir function" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var function: IR.Function = try .init(allocator);
+
+    try function.createBlock();
+    const v0 = try function.iconst(42);
+    const v1 = try function.iconst(85);
+    const v2 = try function.iadd(v0, v1);
+    try function.ret(v2);
+
+    try std.testing.expectEqual(0, 0);
 }

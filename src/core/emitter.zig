@@ -11,6 +11,9 @@ pub const Label = struct {
     fixups: std.ArrayList(usize),
 };
 
+/// Identical to IR's CompKind, but explicitly for setcc instructions
+pub const SetCCKind = enum { eq, ne, lt, le, gt, ge };
+
 pub const Emitter = struct {
     allocator: std.mem.Allocator,
     buffer: ExecBuffer,
@@ -127,6 +130,15 @@ pub const Emitter = struct {
 
         try self.buffer.writeImm(i32, offset);
         try self.buffer.writeImm(i32, imm);
+    }
+
+    pub fn movzx_reg_reg8(self: *Emitter, dest: Register, src: Register) !void {
+        try self.buffer.writeBytes(&[_]u8{
+            encode.rex(true, dest, src),
+            0x0F,
+            0xB6,
+            encode.modrm(dest, src),
+        });
     }
 
     pub fn add_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
@@ -293,7 +305,7 @@ pub const Emitter = struct {
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x3B,
-            encode.modrm(src, dest),
+            encode.modrm(dest, src),
         });
     }
 
@@ -422,5 +434,18 @@ pub const Emitter = struct {
             0xF7,
             0xC0 | (3 << 3) | @as(u8, reg.enc()),
         });
+    }
+
+    /// These instructions for all SetCCKind use `al` which is the low byte of rax, no REX.
+    /// TODO: implement support for registers r8-r15, add REX.B.
+    pub fn setcc(self: *Emitter, kind: SetCCKind, reg: Register) !void {
+        switch (kind) {
+            .eq => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x94, 0xC0 | @as(u8, reg.enc()) }),
+            .ne => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x95, 0xC0 | @as(u8, reg.enc()) }),
+            .lt => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x9C, 0xC0 | @as(u8, reg.enc()) }),
+            .le => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x9E, 0xC0 | @as(u8, reg.enc()) }),
+            .gt => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x9F, 0xC0 | @as(u8, reg.enc()) }),
+            .ge => try self.buffer.writeBytes(&[_]u8{ 0x0F, 0x9D, 0xC0 | @as(u8, reg.enc()) }),
+        }
     }
 };

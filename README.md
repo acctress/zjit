@@ -95,6 +95,25 @@ var code_gen: CodeGen = .init(allocator, &emitter);
 try code_gen.compile(&function);
 ```
 
+Or a max function:
+```zig
+{
+    const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+    const v0 = entry.param(0);
+    const v1 = entry.param(1);
+    const v2 = try function.icmp(.gt, v0, v1);
+    try function.brif(v2, 1, 2);
+
+    // true
+    _ = try function.createBlock(&[_]IR.Type{});
+    try function.ret(v0);
+
+    // false
+    _ = try function.createBlock(&[_]IR.Type{});
+    try function.ret(v1);
+}
+```
+
 ### Calling a Zig function
 ```zig
 fn hello() callconv(.c) i64 {

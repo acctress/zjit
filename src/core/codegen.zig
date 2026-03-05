@@ -24,7 +24,7 @@ pub const CodeGen = struct {
         else
             [_]Register{ .rdi, .rsi, .rdx, .rcx };
 
-        const free_registers = [_]Register{ .rax, .rcx, .rdx, .rbx, .r8, .r9 };
+        const free_registers = [_]Register{ .rax, .rbx, .r10, .r11, .r12, .r13, .r14, .r15 };
 
         var labels: std.ArrayList(usize) = .empty;
         defer labels.deinit(self.allocator);
@@ -56,6 +56,29 @@ pub const CodeGen = struct {
                         try register_map.put(next_val, free_registers[next_val]);
                         try self.emitter.mov_reg_reg(register_map.get(next_val).?, register_map.get(add.lhs).?);
                         try self.emitter.add_reg_reg(register_map.get(next_val).?, register_map.get(add.rhs).?);
+                        next_val += 1;
+                    },
+
+                    .isub => |sub| {
+                        try register_map.put(next_val, free_registers[next_val]);
+                        try self.emitter.mov_reg_reg(register_map.get(next_val).?, register_map.get(sub.lhs).?);
+                        try self.emitter.sub_reg_reg(register_map.get(next_val).?, register_map.get(sub.rhs).?);
+                        next_val += 1;
+                    },
+
+                    .imul => |mul| {
+                        try register_map.put(next_val, free_registers[next_val]);
+                        try self.emitter.mov_reg_reg(register_map.get(next_val).?, register_map.get(mul.lhs).?);
+                        try self.emitter.imul_reg_reg(register_map.get(next_val).?, register_map.get(mul.rhs).?);
+                        next_val += 1;
+                    },
+
+                    .icmp => |icmp| {
+                        try register_map.put(next_val, free_registers[next_val]);
+                        try self.emitter.cmp_reg_reg(register_map.get(icmp.lhs).?, register_map.get(icmp.rhs).?);
+                        try self.emitter.setcc(icmp.kind, .rax);
+                        try self.emitter.movzx_reg_reg8(.rax, .rax);
+                        try self.emitter.mov_reg_reg(register_map.get(next_val).?, .rax);
                         next_val += 1;
                     },
 

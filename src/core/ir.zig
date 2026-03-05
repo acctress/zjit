@@ -1,4 +1,5 @@
 const std = @import("std");
+const SetCCKind = @import("emitter.zig").SetCCKind;
 
 pub const IR = struct {
     pub const Value = u32;
@@ -13,6 +14,9 @@ pub const IR = struct {
     pub const InstType = enum {
         iconst,
         iadd,
+        isub,
+        imul,
+        icmp,
         brif,
         jmp,
         ret,
@@ -21,6 +25,9 @@ pub const IR = struct {
     pub const Inst = union(InstType) {
         iconst: i64,
         iadd: struct { lhs: Value, rhs: Value },
+        isub: struct { lhs: Value, rhs: Value },
+        imul: struct { lhs: Value, rhs: Value },
+        icmp: struct { kind: SetCCKind, lhs: Value, rhs: Value },
         brif: struct { condition: Value, true_block: usize, false_block: usize },
         jmp: struct { to_block: usize },
         ret: struct { value: Value },
@@ -112,6 +119,52 @@ pub const IR = struct {
             ].instructions.append(self.allocator, inst);
 
             try self.types.append(self.allocator, .i64);
+
+            return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn isub(self: *Function, lhs: Value, rhs: Value) !u32 {
+            const inst: Inst = .{ .isub = .{
+                .lhs = lhs,
+                .rhs = rhs,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+
+            try self.types.append(self.allocator, .i64);
+
+            return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn imul(self: *Function, lhs: Value, rhs: Value) !u32 {
+            const inst: Inst = .{ .imul = .{
+                .lhs = lhs,
+                .rhs = rhs,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+
+            try self.types.append(self.allocator, .i64);
+
+            return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn icmp(self: *Function, kind: SetCCKind, lhs: Value, rhs: Value) !u32 {
+            const inst: Inst = .{ .icmp = .{
+                .kind = kind,
+                .lhs = lhs,
+                .rhs = rhs,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+
+            try self.types.append(self.allocator, .bool);
 
             return @intCast(self.types.items.len - 1);
         }

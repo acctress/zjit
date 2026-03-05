@@ -568,3 +568,75 @@ test "function return 1 if arg is not zero else return 0" {
     try std.testing.expectEqual(1, f(1));
     try std.testing.expectEqual(0, f(0));
 }
+
+test "function which is a max function" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var function: IR.Function = try .init(allocator);
+
+    {
+        const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+        const v0 = entry.param(0);
+        const v1 = entry.param(1);
+        const v2 = try function.icmp(.gt, v0, v1);
+        try function.brif(v2, 1, 2);
+
+        // true
+        _ = try function.createBlock(&[_]IR.Type{});
+        try function.ret(v0);
+
+        // false
+        _ = try function.createBlock(&[_]IR.Type{});
+        try function.ret(v1);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
+
+    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+
+    std.debug.print("{d}\n", .{f(5, 10)});
+
+    try std.testing.expectEqual(10, f(10, 5));
+    try std.testing.expectEqual(15, f(15, 10));
+    try std.testing.expectEqual(4, f(4, 2));
+    try std.testing.expectEqual(1, f(1, 0));
+    try std.testing.expectEqual(5, f(5, 4));
+}
+
+test "test cmp" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var function: IR.Function = try .init(allocator);
+
+    {
+        const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+        const v0 = entry.param(0);
+        const v1 = entry.param(1);
+        const v2 = try function.icmp(.gt, v0, v1);
+        try function.ret(v2);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
+
+    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+
+    try std.testing.expectEqual(0, f(5, 10));
+    try std.testing.expectEqual(0, f(2, 10));
+    try std.testing.expectEqual(0, f(7, 10));
+    try std.testing.expectEqual(0, f(8, 10));
+    try std.testing.expectEqual(1, f(11, 10));
+    try std.testing.expectEqual(1, f(56, 10));
+    try std.testing.expectEqual(1, f(120, 10));
+}

@@ -4,6 +4,7 @@ pub const Emitter = @import("core/emitter.zig").Emitter;
 pub const Register = @import("core/regs.zig").Register;
 pub const Encode = @import("core/encode.zig").encode;
 pub const IR = @import("core/ir.zig").IR;
+pub const CodeGen = @import("core/codegen.zig").CodeGen;
 
 test "mov immediate and ret" {
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
@@ -481,4 +482,29 @@ test "simple ir function" {
     try function.ret(v2);
 
     try std.testing.expectEqual(0, 0);
+}
+
+test "compile ir adder function" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var adder: IR.Function = try .init(allocator);
+
+    try adder.createBlock();
+    const v0 = try adder.iconst(42);
+    const v1 = try adder.iconst(85);
+    const v2 = try adder.iadd(v0, v1);
+    try adder.ret(v2);
+
+    var code_gen: CodeGen = .init(&emitter);
+    try code_gen.compile(&adder);
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    try std.testing.expectEqual(127, result);
 }

@@ -641,46 +641,68 @@ test "test cmp" {
     try std.testing.expectEqual(1, f(120, 10));
 }
 
-// test "sum 1 to n IR loop test" {
-//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-//     defer arena.deinit();
-//     const allocator = arena.allocator();
+test "linear scan register reuse" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-//     var emitter: Emitter = try .init(allocator, 1024);
-//     defer emitter.deinit();
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
 
-//     var function: IR.Function = try .init(allocator);
+    var function: IR.Function = try .init(allocator);
 
-//     {
-//         const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-//         const n = entry.param(0);
-//         try function.jmp(0, &[_]IR.Value{
-//             try function.iconst(0),
-//             try function.iconst(0),
-//         });
+    {
+        _ = try function.createBlock(&[_]IR.Type{});
+        const v1 = try function.iconst(10);
+        const v2 = try function.iconst(20);
+        const v3 = try function.iadd(v1, v2);
+        const v4 = try function.iconst(30);
+        const v5 = try function.iadd(v3, v4);
+        try function.ret(v5);
+    }
 
-//         const b1 = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-//         const i = b1.param(0);
-//         const acc = b1.param(1);
-//         const v = try function.icmp(.lt, i, n);
-//         try function.brif(v, 1, 2, &[_]IR.Value{ i, acc }, &[_]IR.Value{acc});
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
 
-//         const b2 = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-//         const i2_ = b2.param(0);
-//         const acc2 = b2.param(1);
-//         const to_add = try function.iconst(1);
-//         _ = try function.iadd(i2_, to_add);
-//         try function.jmp(0, &[_]IR.Value{acc2});
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
 
-//         const b3 = try function.createBlock(&[_]IR.Type{.i64});
-//         const acc3 = b3.param(0);
-//         try function.ret(acc3);
-//     }
+    try std.testing.expectEqual(60, f());
+}
 
-//     var code_gen: CodeGen = .init(allocator, &emitter);
-//     try code_gen.compile(&function);
+test "linear scan exceed register capacity" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
 
-//     const f = try emitter.commit(*const fn (i64) callconv(.c) i64);
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
 
-//     try std.testing.expectEqual(10, f(5));
-// }
+    var function: IR.Function = try .init(allocator);
+
+    {
+        _ = try function.createBlock(&[_]IR.Type{});
+
+        var values: [9]u32 = undefined;
+        for (&values, 1..) |*v, i| {
+            v.* = try function.iconst(@intCast(i));
+            std.debug.print("{d}\n", .{i});
+        }
+
+        var sum = values[0];
+        for (values[1..]) |v| {
+            sum = try function.iadd(sum, v);
+        }
+
+        try function.ret(sum);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    try code_gen.compile(&function);
+
+    const f = try emitter.commit(*const fn () callconv(.c) i64);
+    const result = f();
+
+    std.debug.print("{any}\n", .{result});
+
+    try std.testing.expectEqual(45, f());
+}

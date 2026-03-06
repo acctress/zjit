@@ -5,6 +5,9 @@ const Emitter = @import("emitter.zig").Emitter;
 const builtin = @import("builtin");
 const RegAlloc = @import("regalloc.zig").RegAlloc;
 
+const GEN_REG_COUNT: usize = 8;
+const PTR_SIZE: usize = 8;
+
 pub const LiveRange = struct {
     expired: bool,
     value: u32,
@@ -26,6 +29,31 @@ pub const CodeGen = struct {
             .allocator = allocator,
             .emitter = emitter,
         };
+    }
+
+    /// Compute the maximum amount of concurrent live values
+    fn computeMaximumLive(self: *CodeGen, live_range: std.AutoHashMap(u32, LiveRange)) !usize {
+        var boundaries: std.ArrayList(usize) = .empty;
+        var iter = live_range.iterator();
+        while (iter.next()) |r| {
+            try boundaries.append(self.allocator, r.value_ptr.start);
+            try boundaries.append(self.allocator, r.value_ptr.end);
+        }
+
+        var peak: usize = 0;
+        for (boundaries.items) |i| {
+            var count: usize = 0;
+            iter = live_range.iterator();
+            while (iter.next()) |r| {
+                if (r.value_ptr.start <= i and i <= r.value_ptr.end) {
+                    count += 1;
+                }
+            }
+
+            peak = @max(peak, count);
+        }
+
+        return peak;
     }
 
     /// Compute the lifetimes of registers being used by have a range of usage, when it reaches it's end it's register is usable, cleaned up.
@@ -211,9 +239,12 @@ pub const CodeGen = struct {
 
             try self.emitter.bind(labels.items[block_idx]);
 
-            const give_frames_plz = live_ranges.count() > 8;
-            // ok
-            if (give_frames_plz) try self.emitter.enter(64);
+            const peak = try self.computeMaximumLive(live_ranges);
+            const slots = if (peak > GEN_REG_COUNT) peak - GEN_REG_COUNT else 0;
+            const stk_size = slots * PTR_SIZE;
+            const frames_needed = stk_size > 0;
+
+            if (frames_needed) try self.emitter.enter(64);
 
             for (block.instructions.items) |inst| {
                 switch (inst) {
@@ -314,7 +345,7 @@ pub const CodeGen = struct {
                     .ret => |r| {
                         const val = regalloc.get(r.value) orelse try regalloc.reload(r.value);
                         try self.emitter.mov_reg_reg(.rax, val);
-                        if (give_frames_plz) try self.emitter.leave();
+                        if (frames_needed) try self.emitter.leave();
                         try self.emitter.ret();
                     },
                 }

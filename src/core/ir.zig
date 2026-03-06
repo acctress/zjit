@@ -4,12 +4,16 @@ const SetCCKind = @import("emitter.zig").SetCCKind;
 pub const IR = struct {
     pub const Value = u32;
 
+    pub const no_args: []const Value = &[_]Value{};
+
     pub const Type = enum {
         i64,
         i32,
         bool,
         ptr,
     };
+
+    pub const no_types: []const Type = &[_]Type{};
 
     pub const InstType = enum {
         iconst,
@@ -28,8 +32,14 @@ pub const IR = struct {
         isub: struct { lhs: Value, rhs: Value },
         imul: struct { lhs: Value, rhs: Value },
         icmp: struct { kind: SetCCKind, lhs: Value, rhs: Value },
-        brif: struct { condition: Value, true_block: usize, false_block: usize },
-        jmp: struct { to_block: usize },
+        brif: struct {
+            condition: Value,
+            true_block: usize,
+            false_block: usize,
+            true_args: []const Value,
+            false_args: []const Value,
+        },
+        jmp: struct { to_block: usize, args: []const Value },
         ret: struct { value: Value },
     };
 
@@ -169,12 +179,21 @@ pub const IR = struct {
             return @intCast(self.types.items.len - 1);
         }
 
-        pub fn brif(self: *Function, condition: Value, true_block: usize, false_block: usize) !void {
+        pub fn brif(
+            self: *Function,
+            condition: Value,
+            true_block: usize,
+            false_block: usize,
+            true_args: []const Value,
+            false_args: []const Value,
+        ) !void {
             const inst: Inst = .{
                 .brif = .{
                     .condition = condition,
                     .true_block = true_block,
                     .false_block = false_block,
+                    .true_args = true_args,
+                    .false_args = false_args,
                 },
             };
 
@@ -183,9 +202,10 @@ pub const IR = struct {
             ].instructions.append(self.allocator, inst);
         }
 
-        pub fn jmp(self: *Function, to_block: usize) !void {
+        pub fn jmp(self: *Function, to_block: usize, args: []const Value) !void {
             const inst: Inst = .{ .jmp = .{
                 .to_block = to_block,
+                .args = args,
             } };
 
             try self.blocks.items[

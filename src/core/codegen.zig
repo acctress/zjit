@@ -34,6 +34,7 @@ pub const CodeGen = struct {
         }
 
         var next_val: u32 = 0;
+        var free_reg_idx: u32 = 0;
         for (func.blocks.items, 0..) |block, block_idx| {
             next_val += @as(u32, @intCast(block.parameters.len));
 
@@ -49,6 +50,7 @@ pub const CodeGen = struct {
                     .iconst => |constant| {
                         try register_map.put(next_val, free_registers[next_val]);
                         try self.emitter.mov_reg_imm64(register_map.get(next_val).?, constant);
+                        free_reg_idx += 1;
                         next_val += 1;
                     },
 
@@ -56,6 +58,7 @@ pub const CodeGen = struct {
                         try register_map.put(next_val, free_registers[next_val]);
                         try self.emitter.mov_reg_reg(register_map.get(next_val).?, register_map.get(add.lhs).?);
                         try self.emitter.add_reg_reg(register_map.get(next_val).?, register_map.get(add.rhs).?);
+                        free_reg_idx += 1;
                         next_val += 1;
                     },
 
@@ -83,12 +86,45 @@ pub const CodeGen = struct {
                     },
 
                     .brif => |brif| {
+                        // don't want to corrupt registers if the condition isn't true or false
+                        // so jump to the correct label depending on condition to avoid this
+                        const true_guard = try self.emitter.label();
+                        const false_guard = try self.emitter.label();
+
                         try self.emitter.cmp_reg_imm32(register_map.get(brif.condition).?, 0);
-                        try self.emitter.jnz(labels.items[brif.true_block]);
+                        try self.emitter.jnz(true_guard);
+
+                        try self.emitter.bind(false_guard);
+                        if (brif.false_args.len > 0) {
+                            for (brif.false_args, 0..) |arg, arg_idx| {
+                                // a really simple move of the jmp arg regs to block arg regs.
+                                const target_reg = arg_registers[arg_idx];
+                                const src_reg = register_map.get(arg).?;
+                                try self.emitter.mov_reg_reg(target_reg, src_reg);
+                            }
+                        }
                         try self.emitter.jmp(labels.items[brif.false_block]);
+
+                        try self.emitter.bind(true_guard);
+                        if (brif.true_args.len > 0) {
+                            for (brif.true_args, 0..) |arg, arg_idx| {
+                                // a really simple move of the jmp arg regs to block arg regs.
+                                const target_reg = arg_registers[arg_idx];
+                                const src_reg = register_map.get(arg).?;
+                                try self.emitter.mov_reg_reg(target_reg, src_reg);
+                            }
+                        }
+                        try self.emitter.jmp(labels.items[brif.true_block]);
                     },
 
                     .jmp => |jmp| {
+                        for (jmp.args, 0..) |arg, arg_idx| {
+                            // a really simple move of the jmp arg regs to block arg regs.
+                            const target_reg = arg_registers[arg_idx];
+                            const src_reg = register_map.get(arg).?;
+                            try self.emitter.mov_reg_reg(target_reg, src_reg);
+                        }
+
                         try self.emitter.jmp(labels.items[jmp.to_block]);
                     },
 

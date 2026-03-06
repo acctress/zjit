@@ -494,7 +494,7 @@ test "compile ir adder function" {
 
     var adder: IR.Function = try .init(allocator);
 
-    _ = try adder.createBlock(&[_]IR.Type{});
+    _ = try adder.createBlock(IR.no_types);
     const v0 = try adder.iconst(42);
     const v1 = try adder.iconst(85);
     const v2 = try adder.iadd(v0, v1);
@@ -547,15 +547,15 @@ test "function return 1 if arg is not zero else return 0" {
     {
         const entry = try function.createBlock(&[_]IR.Type{.i64});
         const v0 = entry.param(0);
-        try function.brif(v0, 1, 2);
+        try function.brif(v0, 1, 2, IR.no_args, IR.no_args);
 
         // true
-        _ = try function.createBlock(&[_]IR.Type{});
+        _ = try function.createBlock(IR.no_types);
         const v_true = try function.iconst(1);
         try function.ret(v_true);
 
         // false
-        _ = try function.createBlock(&[_]IR.Type{});
+        _ = try function.createBlock(IR.no_types);
         const v_false = try function.iconst(0);
         try function.ret(v_false);
     }
@@ -584,14 +584,14 @@ test "function which is a max function" {
         const v0 = entry.param(0);
         const v1 = entry.param(1);
         const v2 = try function.icmp(.gt, v0, v1);
-        try function.brif(v2, 1, 2);
+        try function.brif(v2, 1, 2, IR.no_args, IR.no_args);
 
         // true
-        _ = try function.createBlock(&[_]IR.Type{});
+        _ = try function.createBlock(IR.no_types);
         try function.ret(v0);
 
         // false
-        _ = try function.createBlock(&[_]IR.Type{});
+        _ = try function.createBlock(IR.no_types);
         try function.ret(v1);
     }
 
@@ -640,3 +640,47 @@ test "test cmp" {
     try std.testing.expectEqual(1, f(56, 10));
     try std.testing.expectEqual(1, f(120, 10));
 }
+
+// test "sum 1 to n IR loop test" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//         const n = entry.param(0);
+//         try function.jmp(0, &[_]IR.Value{
+//             try function.iconst(0),
+//             try function.iconst(0),
+//         });
+
+//         const b1 = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//         const i = b1.param(0);
+//         const acc = b1.param(1);
+//         const v = try function.icmp(.lt, i, n);
+//         try function.brif(v, 1, 2, &[_]IR.Value{ i, acc }, &[_]IR.Value{acc});
+
+//         const b2 = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//         const i2_ = b2.param(0);
+//         const acc2 = b2.param(1);
+//         const to_add = try function.iconst(1);
+//         _ = try function.iadd(i2_, to_add);
+//         try function.jmp(0, &[_]IR.Value{acc2});
+
+//         const b3 = try function.createBlock(&[_]IR.Type{.i64});
+//         const acc3 = b3.param(0);
+//         try function.ret(acc3);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn (i64) callconv(.c) i64);
+
+//     try std.testing.expectEqual(10, f(5));
+// }

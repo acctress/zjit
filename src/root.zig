@@ -735,7 +735,6 @@ test "module with function IR test" {
     var code_gen: CodeGen = .init(allocator, &emitter);
     var compiled_module = try code_gen.compileModule(module);
 
-    std.debug.print("stored: {}\n", .{compiled_module.functions.count()});
     const f = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
     std.debug.print("f: {?}\n", .{f});
 

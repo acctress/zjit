@@ -88,8 +88,6 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
-        std.debug.print("mov reg reg {x}\n", .{encode.rex(true, src, dest)});
-
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x89,

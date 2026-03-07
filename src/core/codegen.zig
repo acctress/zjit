@@ -213,11 +213,6 @@ pub const CodeGen = struct {
         const live_ranges = try self.computeLiveRanges(func);
         const peak_live = try self.computeMaximumLive(live_ranges);
 
-        var dbg = live_ranges.iterator();
-        while (dbg.next()) |e| {
-            std.debug.print("v{}: [{}, {}]\n", .{ e.value_ptr.value, e.value_ptr.start, e.value_ptr.end });
-        }
-
         var regalloc: RegAlloc = try .init(
             self.allocator,
             live_ranges,
@@ -225,14 +220,6 @@ pub const CodeGen = struct {
         );
 
         try regalloc.walk(func, &ARG_REGISTERS);
-
-        var ass_iter = regalloc.assignments.iterator();
-        while (ass_iter.next()) |*a| {
-            std.debug.print("assignment {d}: {s}\n", .{
-                a.key_ptr.*,
-                @tagName(a.value_ptr.*),
-            });
-        }
 
         const slots = if (peak_live > GEN_REG_COUNT) peak_live - GEN_REG_COUNT else 0;
         const stk_size = slots * PTR_SIZE;
@@ -280,16 +267,7 @@ pub const CodeGen = struct {
                         const lhs = try self.inRegister(&regalloc, i.lhs);
                         const rhs = try self.inRegister(&regalloc, i.rhs);
                         const reg = regalloc.get(i.result) orelse return error.ResultNotAllocated;
-                        // const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
-                        // const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
-                        std.debug.print("iadd lhs = {s}\n", .{@tagName(lhs)});
-                        std.debug.print("iadd rhs = {s}\n", .{@tagName(rhs)});
                         try self.emitter.mov_reg_reg(reg, lhs);
-                        std.debug.print("iadd after mov reg reg bytes: ", .{});
-                        for (self.emitter.buffer.mem[0..self.emitter.buffer.writePos]) |byte| {
-                            std.debug.print("0x{x}, ", .{byte});
-                        }
-                        std.debug.print("\n", .{});
                         try self.emitter.add_reg_reg(reg, rhs);
                     },
 
@@ -357,8 +335,6 @@ pub const CodeGen = struct {
                         const value = regalloc.get(i.value) orelse try regalloc.reload(i.value);
 
                         try self.emitter.mov_reg_reg(.rax, value);
-                        std.debug.print("ucr_count = {d}\n", .{ucr_count});
-                        std.debug.print("frames_needed = {any}\n", .{frames_needed});
                         if (ucr_count > 0) {
                             var pop_count = ucr_count;
                             while (pop_count > 0) : (pop_count -= 1) {
@@ -377,12 +353,6 @@ pub const CodeGen = struct {
 
                 var live_iter = live_ranges.iterator();
                 while (live_iter.next()) |*e| {
-                    std.debug.print("emission free, value = {d}, end = {d}, inst_idx = {d}\n", .{
-                        e.value_ptr.value,
-                        e.value_ptr.end,
-                        inst_idx,
-                    });
-
                     if (e.*.value_ptr.end == inst_idx - 1) {
                         try regalloc.free(e.*.value_ptr.value);
                     }
@@ -400,14 +370,6 @@ pub const CodeGen = struct {
             try self.emitter.patchAt(patch_pos, bytes);
             patch_pos += bytes.len;
         }
-
-        std.debug.print("prologue: {d}\n", .{prologue});
-
-        std.debug.print("entry bytes: ", .{});
-        for (self.emitter.buffer.mem[0..32]) |byte| {
-            std.debug.print("0x{x}, ", .{byte});
-        }
-        std.debug.print("\n", .{});
 
         const entry_ptr: *const anyopaque = @ptrCast(&self.emitter.buffer.mem[prologue]);
         try mod.functions.put(func_idx, entry_ptr);

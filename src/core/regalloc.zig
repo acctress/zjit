@@ -78,10 +78,7 @@ pub const RegAlloc = struct {
                 switch (inst) {
                     .brif, .jmp, .ret => {},
                     .iconst => |i| _ = try self.alloc(i.result, null),
-                    .iadd => |i| {
-                        // std.debug.print("allocation iadd, instruction_idx = {d}\n", .{self.instruction_idx});
-                        _ = try self.alloc(i.result, null);
-                    },
+                    .iadd => |i| _ = try self.alloc(i.result, null),
                     .isub => |i| _ = try self.alloc(i.result, null),
                     .imul => |i| _ = try self.alloc(i.result, null),
                     .icmp => |i| _ = try self.alloc(i.result, null),

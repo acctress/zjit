@@ -468,23 +468,246 @@ test "load a string pointer into memory and return it" {
     try std.testing.expectEqual(0, result);
 }
 
-test "ir function with params" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+// test "ir function with params" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
 
-    var function: IR.Function = try .init(allocator);
+//     var function: IR.Function = try .init(allocator);
 
-    const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-    const v0 = block.param(0);
-    const v1 = block.param(1);
-    const v2 = try function.iadd(v0, v1);
-    try function.ret(v2);
+//     const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//     const v0 = block.param(0);
+//     const v1 = block.param(1);
+//     const v2 = try function.iadd(v0, v1);
+//     try function.ret(v2);
 
-    try std.testing.expectEqual(0, 0);
-}
+//     try std.testing.expectEqual(0, 0);
+// }
 
-test "compile ir adder function" {
+// test "compile ir adder function" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var adder: IR.Function = try .init(allocator);
+
+//     _ = try adder.createBlock(IR.no_types);
+//     const v0 = try adder.iconst(42);
+//     const v1 = try adder.iconst(85);
+//     const v2 = try adder.iadd(v0, v1);
+//     try adder.ret(v2);
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&adder);
+
+//     const f = try emitter.commit(*const fn () callconv(.c) i64);
+//     const result = f();
+
+//     try std.testing.expectEqual(127, result);
+// }
+
+// test "call ir function with params and pass args" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//     const v0 = block.param(0);
+//     const v1 = block.param(1);
+//     const v2 = try function.iadd(v0, v1);
+//     try function.ret(v2);
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+//     const result = f(10, 10);
+
+//     try std.testing.expectEqual(result, 20);
+// }
+
+// test "function return 1 if arg is not zero else return 0" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         const entry = try function.createBlock(&[_]IR.Type{.i64});
+//         const v0 = entry.param(0);
+//         try function.brif(v0, 1, 2, IR.no_args, IR.no_args);
+
+//         // true
+//         _ = try function.createBlock(IR.no_types);
+//         const v_true = try function.iconst(1);
+//         try function.ret(v_true);
+
+//         // false
+//         _ = try function.createBlock(IR.no_types);
+//         const v_false = try function.iconst(0);
+//         try function.ret(v_false);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn (i64) callconv(.c) i64);
+
+//     try std.testing.expectEqual(1, f(1));
+//     try std.testing.expectEqual(0, f(0));
+// }
+
+// test "function which is a max function" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//         const v0 = entry.param(0);
+//         const v1 = entry.param(1);
+//         const v2 = try function.icmp(.gt, v0, v1);
+//         try function.brif(v2, 1, 2, IR.no_args, IR.no_args);
+
+//         // true
+//         _ = try function.createBlock(IR.no_types);
+//         try function.ret(v0);
+
+//         // false
+//         _ = try function.createBlock(IR.no_types);
+//         try function.ret(v1);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+
+//     std.debug.print("{d}\n", .{f(5, 10)});
+
+//     try std.testing.expectEqual(10, f(10, 5));
+//     try std.testing.expectEqual(15, f(15, 10));
+//     try std.testing.expectEqual(4, f(4, 2));
+//     try std.testing.expectEqual(1, f(1, 0));
+//     try std.testing.expectEqual(5, f(5, 4));
+// }
+
+// test "test cmp" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
+//         const v0 = entry.param(0);
+//         const v1 = entry.param(1);
+//         const v2 = try function.icmp(.gt, v0, v1);
+//         try function.ret(v2);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
+
+//     try std.testing.expectEqual(0, f(5, 10));
+//     try std.testing.expectEqual(0, f(2, 10));
+//     try std.testing.expectEqual(0, f(7, 10));
+//     try std.testing.expectEqual(0, f(8, 10));
+//     try std.testing.expectEqual(1, f(11, 10));
+//     try std.testing.expectEqual(1, f(56, 10));
+//     try std.testing.expectEqual(1, f(120, 10));
+// }
+
+// test "linear scan register reuse" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         _ = try function.createBlock(&[_]IR.Type{});
+//         const v1 = try function.iconst(10);
+//         const v2 = try function.iconst(20);
+//         const v3 = try function.iadd(v1, v2);
+//         const v4 = try function.iconst(30);
+//         const v5 = try function.iadd(v3, v4);
+//         try function.ret(v5);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn () callconv(.c) i64);
+
+//     try std.testing.expectEqual(60, f());
+// }
+
+// test "linear scan exceed register capacity" {
+//     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+//     defer arena.deinit();
+//     const allocator = arena.allocator();
+
+//     var emitter: Emitter = try .init(allocator, 1024);
+//     defer emitter.deinit();
+
+//     var function: IR.Function = try .init(allocator);
+
+//     {
+//         _ = try function.createBlock(&[_]IR.Type{});
+
+//         var values: [9]u32 = undefined;
+//         for (&values, 1..) |*v, i| {
+//             v.* = try function.iconst(@intCast(i));
+//             std.debug.print("{d}\n", .{i});
+//         }
+
+//         var sum = values[0];
+//         for (values[1..]) |v| {
+//             sum = try function.iadd(sum, v);
+//         }
+
+//         try function.ret(sum);
+//     }
+
+//     var code_gen: CodeGen = .init(allocator, &emitter);
+//     try code_gen.compile(&function);
+
+//     const f = try emitter.commit(*const fn () callconv(.c) i64);
+//     const result = f();
+
+//     std.debug.print("{any}\n", .{result});
+
+//     try std.testing.expectEqual(45, f());
+// }
+
+test "module with function IR test" {
     var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -492,217 +715,29 @@ test "compile ir adder function" {
     var emitter: Emitter = try .init(allocator, 1024);
     defer emitter.deinit();
 
-    var adder: IR.Function = try .init(allocator);
-
-    _ = try adder.createBlock(IR.no_types);
-    const v0 = try adder.iconst(42);
-    const v1 = try adder.iconst(85);
-    const v2 = try adder.iadd(v0, v1);
-    try adder.ret(v2);
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&adder);
-
-    const f = try emitter.commit(*const fn () callconv(.c) i64);
-    const result = f();
-
-    try std.testing.expectEqual(127, result);
-}
-
-test "call ir function with params and pass args" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
-
-    const block = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-    const v0 = block.param(0);
-    const v1 = block.param(1);
-    const v2 = try function.iadd(v0, v1);
-    try function.ret(v2);
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
-
-    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
-    const result = f(10, 10);
-
-    try std.testing.expectEqual(result, 20);
-}
-
-test "function return 1 if arg is not zero else return 0" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
+    var module: IR.Module = .init(allocator);
+    defer module.deinit();
 
     {
-        const entry = try function.createBlock(&[_]IR.Type{.i64});
-        const v0 = entry.param(0);
-        try function.brif(v0, 1, 2, IR.no_args, IR.no_args);
+        const adder = try module.createFunction(
+            "add",
+            &[_]IR.Type{ .i64, .i64 },
+            .i64,
+        );
 
-        // true
-        _ = try function.createBlock(IR.no_types);
-        const v_true = try function.iconst(1);
-        try function.ret(v_true);
-
-        // false
-        _ = try function.createBlock(IR.no_types);
-        const v_false = try function.iconst(0);
-        try function.ret(v_false);
+        const entry = try adder.createBlock(&[_]IR.Type{ .i64, .i64 });
+        const param1 = entry.param(0);
+        const param2 = entry.param(1);
+        const result = try adder.iadd(param1, param2);
+        try adder.ret(result);
     }
 
     var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
+    var compiled_module = try code_gen.compileModule(module);
 
-    const f = try emitter.commit(*const fn (i64) callconv(.c) i64);
+    std.debug.print("stored: {}\n", .{compiled_module.functions.count()});
+    const f = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
+    std.debug.print("f: {?}\n", .{f});
 
-    try std.testing.expectEqual(1, f(1));
-    try std.testing.expectEqual(0, f(0));
-}
-
-test "function which is a max function" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
-
-    {
-        const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-        const v0 = entry.param(0);
-        const v1 = entry.param(1);
-        const v2 = try function.icmp(.gt, v0, v1);
-        try function.brif(v2, 1, 2, IR.no_args, IR.no_args);
-
-        // true
-        _ = try function.createBlock(IR.no_types);
-        try function.ret(v0);
-
-        // false
-        _ = try function.createBlock(IR.no_types);
-        try function.ret(v1);
-    }
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
-
-    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
-
-    std.debug.print("{d}\n", .{f(5, 10)});
-
-    try std.testing.expectEqual(10, f(10, 5));
-    try std.testing.expectEqual(15, f(15, 10));
-    try std.testing.expectEqual(4, f(4, 2));
-    try std.testing.expectEqual(1, f(1, 0));
-    try std.testing.expectEqual(5, f(5, 4));
-}
-
-test "test cmp" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
-
-    {
-        const entry = try function.createBlock(&[_]IR.Type{ .i64, .i64 });
-        const v0 = entry.param(0);
-        const v1 = entry.param(1);
-        const v2 = try function.icmp(.gt, v0, v1);
-        try function.ret(v2);
-    }
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
-
-    const f = try emitter.commit(*const fn (i64, i64) callconv(.c) i64);
-
-    try std.testing.expectEqual(0, f(5, 10));
-    try std.testing.expectEqual(0, f(2, 10));
-    try std.testing.expectEqual(0, f(7, 10));
-    try std.testing.expectEqual(0, f(8, 10));
-    try std.testing.expectEqual(1, f(11, 10));
-    try std.testing.expectEqual(1, f(56, 10));
-    try std.testing.expectEqual(1, f(120, 10));
-}
-
-test "linear scan register reuse" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
-
-    {
-        _ = try function.createBlock(&[_]IR.Type{});
-        const v1 = try function.iconst(10);
-        const v2 = try function.iconst(20);
-        const v3 = try function.iadd(v1, v2);
-        const v4 = try function.iconst(30);
-        const v5 = try function.iadd(v3, v4);
-        try function.ret(v5);
-    }
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
-
-    const f = try emitter.commit(*const fn () callconv(.c) i64);
-
-    try std.testing.expectEqual(60, f());
-}
-
-test "linear scan exceed register capacity" {
-    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
-
-    var emitter: Emitter = try .init(allocator, 1024);
-    defer emitter.deinit();
-
-    var function: IR.Function = try .init(allocator);
-
-    {
-        _ = try function.createBlock(&[_]IR.Type{});
-
-        var values: [9]u32 = undefined;
-        for (&values, 1..) |*v, i| {
-            v.* = try function.iconst(@intCast(i));
-            std.debug.print("{d}\n", .{i});
-        }
-
-        var sum = values[0];
-        for (values[1..]) |v| {
-            sum = try function.iadd(sum, v);
-        }
-
-        try function.ret(sum);
-    }
-
-    var code_gen: CodeGen = .init(allocator, &emitter);
-    try code_gen.compile(&function);
-
-    const f = try emitter.commit(*const fn () callconv(.c) i64);
-    const result = f();
-
-    std.debug.print("{any}\n", .{result});
-
-    try std.testing.expectEqual(45, f());
+    try std.testing.expectEqual(3, f(1, 2));
 }

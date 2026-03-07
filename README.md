@@ -133,6 +133,7 @@ Windows: `rcx, rdx, r8, r9`
 Linux: `rdi, rsi, rdx, rcx`
 
 # Resources & Links Used
+# [Linear Scan Algorithm for Register Allocation](https://dl.acm.org/doi/epdf/10.1145/330249.330250)
 * [VirtualAlloc](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
 * [VirtualFree](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree)
 * [std.posix.mmap](https://ziglang.org/documentation/master/std/#std.posix.mmap)

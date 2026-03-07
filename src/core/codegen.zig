@@ -4,9 +4,42 @@ const Register = @import("regs.zig").Register;
 const Emitter = @import("emitter.zig").Emitter;
 const builtin = @import("builtin");
 const RegAlloc = @import("regalloc.zig").RegAlloc;
+const encode = @import("encode.zig").encode;
 
 const GEN_REG_COUNT: usize = 8;
 const PTR_SIZE: usize = 8;
+
+const CALLEE_SAVED = if (builtin.os.tag == .windows)
+    [_]Register{ .rbx, .rsi, .rdi, .r12, .r13, .r14, .r15 }
+else
+    [_]Register{ .rbx, .r12, .r13, .r14, .r15 };
+
+const ARG_REGISTERS = if (builtin.os.tag == .windows)
+    [_]Register{ .rcx, .rdx, .r8, .r9 }
+else
+    [_]Register{ .rdi, .rsi, .rdx, .rcx };
+
+pub const GenModule = struct {
+    allocator: std.mem.Allocator,
+    functions: std.AutoHashMap(usize, *const anyopaque),
+
+    pub fn init(allocator: std.mem.Allocator) GenModule {
+        return .{
+            .allocator = allocator,
+            .functions = .init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *GenModule) void {
+        self.functions.deinit();
+    }
+
+    pub fn getFunction(self: *GenModule, idx: usize, comptime Fn: type) ?Fn {
+        if (self.functions.contains(idx))
+            return @ptrCast(self.functions.get(idx).?);
+        return null;
+    }
+};
 
 pub const LiveRange = struct {
     expired: bool,
@@ -19,6 +52,14 @@ const Allocation = struct {
     tag: enum { register, stack },
     data: union { reg: Register, slot: i32 },
 };
+
+fn isCalleeRegister(reg: Register) bool {
+    for (CALLEE_SAVED) |r| {
+        if (reg == r) return true;
+    }
+
+    return false;
+}
 
 pub const CodeGen = struct {
     allocator: std.mem.Allocator,
@@ -61,7 +102,6 @@ pub const CodeGen = struct {
         var live_ranges: std.AutoHashMap(u32, LiveRange) = .init(self.allocator);
 
         var instruction_idx: u32 = 0;
-        var next_val: u32 = 0;
         for (func.blocks.items, 0..) |block, block_idx| {
             for (block.parameters, 0..) |_, p_idx| {
                 const vidx = func.param_indices.items[block_idx][p_idx];
@@ -73,23 +113,16 @@ pub const CodeGen = struct {
                     .expired = false,
                 });
 
-                next_val += 1;
                 instruction_idx += 1;
             }
 
             for (block.instructions.items) |inst| {
                 switch (inst) {
-                    .iconst, .iadd, .isub, .imul, .icmp => {
-                        try live_ranges.put(next_val, LiveRange{
-                            .start = instruction_idx,
-                            .end = 0,
-                            .value = next_val,
-                            .expired = true,
-                        });
-
-                        next_val += 1;
-                    },
-
+                    .iconst => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .iadd => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .isub => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .imul => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .icmp => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .brif, .jmp, .ret => {},
                 }
 
@@ -98,7 +131,6 @@ pub const CodeGen = struct {
         }
 
         instruction_idx = 0;
-        next_val = 0;
 
         // compute the end time now, it will always be instruction_idx
         // ensure to add these checks for instructions which use values
@@ -151,73 +183,78 @@ pub const CodeGen = struct {
         return live_ranges;
     }
 
-    fn scanLiveRanges(
-        self: *CodeGen,
-        live_ranges: std.AutoHashMap(u32, LiveRange),
-    ) !std.AutoHashMap(u32, Register) {
-        var ranges: std.ArrayList(LiveRange) = .empty;
-        var iter = live_ranges.iterator();
+    pub fn compileModule(self: *CodeGen, module: IR.Module) !GenModule {
+        var mod: GenModule = .init(self.allocator);
 
-        while (iter.next()) |e| {
-            try ranges.append(self.allocator, e.value_ptr.*);
+        for (module.functions.items, 0..) |*func, func_idx| {
+            try self.compileFunction(func, &mod, func_idx);
         }
 
-        std.mem.sort(LiveRange, ranges.items, {}, struct {
-            fn lessThanFn(_: void, a: LiveRange, b: LiveRange) bool {
-                return a.start < b.start;
-            }
-        }.lessThanFn);
-
-        var result: std.AutoHashMap(u32, Register) = .init(self.allocator);
-        var free_regs: std.ArrayList(Register) = .empty;
-        var active_ranges: std.ArrayList(LiveRange) = .empty;
-
-        const regs = [_]Register{ .rax, .rbx, .r10, .r11, .r12, .r13, .r14, .r15 };
-        for (regs) |r| try free_regs.append(self.allocator, r);
-
-        for (ranges.items) |range| {
-            // expire
-            for (active_ranges.items) |*a| {
-                if (a.end < range.start) {
-                    a.expired = true;
-                    try free_regs.append(self.allocator, result.get(a.value).?);
-                }
-            }
-
-            // remove
-            var i: usize = 0;
-            while (i < active_ranges.items.len) {
-                if (active_ranges.items[i].expired) {
-                    _ = active_ranges.swapRemove(i);
-                } else {
-                    i += 1;
-                }
-            }
-
-            // assign
-            if (free_regs.items.len > 0) {
-                const r = free_regs.pop();
-                try result.put(range.value, r.?);
-                try active_ranges.append(self.allocator, range);
-            }
-        }
-
-        return result;
+        _ = try self.emitter.buffer.commit(*const anyopaque);
+        return mod;
     }
 
-    pub fn compile(self: *CodeGen, func: *IR.Function) !void {
-        const arg_registers = if (comptime builtin.os.tag == .windows)
-            [_]Register{ .rcx, .rdx, .r8, .r9 }
-        else
-            [_]Register{ .rdi, .rsi, .rdx, .rcx };
+    fn inRegister(self: *CodeGen, regalloc: *RegAlloc, value: IR.Value) !Register {
+        if (regalloc.get(value)) |r| {
+            return r;
+        }
 
+        if (regalloc.spilled.get(value)) |offset| {
+            const temp: Register = .r10;
+            try self.emitter.mov_reg_mem(temp, .rbp, offset);
+            return temp;
+        }
+
+        return error.ValueNotFound;
+    }
+
+    fn compileFunction(self: *CodeGen, func: *IR.Function, mod: *GenModule, func_idx: usize) !void {
+        // first pass, essentially pre allocate registers, calculate life times, and check if we need frames
         const live_ranges = try self.computeLiveRanges(func);
-        var regalloc = try RegAlloc.init(
+        const peak_live = try self.computeMaximumLive(live_ranges);
+
+        var dbg = live_ranges.iterator();
+        while (dbg.next()) |e| {
+            std.debug.print("v{}: [{}, {}]\n", .{ e.value_ptr.value, e.value_ptr.start, e.value_ptr.end });
+        }
+
+        var regalloc: RegAlloc = try .init(
             self.allocator,
-            self.emitter,
             live_ranges,
-            &arg_registers,
+            &ARG_REGISTERS,
         );
+
+        try regalloc.walk(func, &ARG_REGISTERS);
+
+        var ass_iter = regalloc.assignments.iterator();
+        while (ass_iter.next()) |*a| {
+            std.debug.print("assignment {d}: {s}\n", .{
+                a.key_ptr.*,
+                @tagName(a.value_ptr.*),
+            });
+        }
+
+        const slots = if (peak_live > GEN_REG_COUNT) peak_live - GEN_REG_COUNT else 0;
+        const stk_size = slots * PTR_SIZE;
+        const frames_needed = stk_size > 0;
+
+        var used_callee_regs_buf: [32]Register = undefined;
+        var ucr_count: usize = 0;
+
+        var iter = regalloc.used_registers.keyIterator();
+        while (iter.next()) |reg| {
+            if (isCalleeRegister(reg.*)) {
+                used_callee_regs_buf[ucr_count] = reg.*;
+                ucr_count += 1;
+            }
+        }
+
+        const used_callee_regs = used_callee_regs_buf[0..ucr_count];
+        const prologue = self.emitter.buffer.writePos;
+
+        try self.emitter.nop(@as(u32, @intCast(used_callee_regs.len)) * 3);
+
+        if (frames_needed) try self.emitter.enter(stk_size);
 
         var labels: std.ArrayList(usize) = .empty;
         defer labels.deinit(self.allocator);
@@ -227,138 +264,152 @@ pub const CodeGen = struct {
         }
 
         var inst_idx: usize = 0;
-        var next_val: u32 = 0;
-        for (func.blocks.items, 0..) |block, block_idx| {
-            next_val += @as(u32, @intCast(block.parameters.len));
+        for (func.blocks.items, 0..) |*block, block_idx| {
             inst_idx += block.parameters.len;
-
-            for (block.parameters, 0..) |_, param_idx| {
-                const val_idx = func.param_indices.items[block_idx][param_idx];
-                _ = try regalloc.alloc(val_idx, arg_registers[param_idx]);
-            }
 
             try self.emitter.bind(labels.items[block_idx]);
 
-            const peak = try self.computeMaximumLive(live_ranges);
-            const slots = if (peak > GEN_REG_COUNT) peak - GEN_REG_COUNT else 0;
-            const stk_size = slots * PTR_SIZE;
-            const frames_needed = stk_size > 0;
-
-            if (frames_needed) try self.emitter.enter(64);
-
-            for (block.instructions.items) |inst| {
-                switch (inst) {
-                    .iconst => |constant| {
-                        const reg = try regalloc.alloc(next_val, null);
-
-                        try self.emitter.mov_reg_imm64(reg, constant);
-                        next_val += 1;
+            for (block.instructions.items) |*inst| {
+                switch (inst.*) {
+                    .iconst => |i| {
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+                        try self.emitter.mov_reg_imm64(reg, i.constant);
                     },
 
-                    .iadd => |add| {
-                        const reg = try regalloc.alloc(next_val, null);
-                        const lhs = regalloc.get(add.lhs) orelse try regalloc.reload(add.lhs);
-                        const rhs = regalloc.get(add.rhs) orelse try regalloc.reload(add.rhs);
-
+                    .iadd => |i| {
+                        const lhs = try self.inRegister(&regalloc, i.lhs);
+                        const rhs = try self.inRegister(&regalloc, i.rhs);
+                        const reg = regalloc.get(i.result) orelse return error.ResultNotAllocated;
+                        // const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
+                        // const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
+                        std.debug.print("iadd lhs = {s}\n", .{@tagName(lhs)});
+                        std.debug.print("iadd rhs = {s}\n", .{@tagName(rhs)});
                         try self.emitter.mov_reg_reg(reg, lhs);
+                        std.debug.print("iadd after mov reg reg bytes: ", .{});
+                        for (self.emitter.buffer.mem[0..self.emitter.buffer.writePos]) |byte| {
+                            std.debug.print("0x{x}, ", .{byte});
+                        }
+                        std.debug.print("\n", .{});
                         try self.emitter.add_reg_reg(reg, rhs);
-                        next_val += 1;
                     },
 
-                    .isub => |sub| {
-                        const reg = try regalloc.alloc(next_val, null);
-                        const lhs = regalloc.get(sub.lhs) orelse try regalloc.reload(sub.lhs);
-                        const rhs = regalloc.get(sub.rhs) orelse try regalloc.reload(sub.rhs);
-
+                    .isub => |i| {
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+                        const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
+                        const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
                         try self.emitter.mov_reg_reg(reg, lhs);
                         try self.emitter.sub_reg_reg(reg, rhs);
-                        next_val += 1;
                     },
 
-                    .imul => |mul| {
-                        const reg = try regalloc.alloc(next_val, null);
-                        const lhs = regalloc.get(mul.lhs) orelse try regalloc.reload(mul.lhs);
-                        const rhs = regalloc.get(mul.rhs) orelse try regalloc.reload(mul.rhs);
-
+                    .imul => |i| {
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+                        const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
+                        const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
                         try self.emitter.mov_reg_reg(reg, lhs);
                         try self.emitter.imul_reg_reg(reg, rhs);
-                        next_val += 1;
                     },
 
-                    .icmp => |icmp| {
-                        const reg = try regalloc.alloc(next_val, null);
-                        const lhs = regalloc.get(icmp.lhs) orelse try regalloc.reload(icmp.lhs);
-                        const rhs = regalloc.get(icmp.rhs) orelse try regalloc.reload(icmp.rhs);
-
+                    .icmp => |i| {
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+                        const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
+                        const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
                         try self.emitter.cmp_reg_reg(lhs, rhs);
-                        try self.emitter.setcc(icmp.kind, .rax);
+                        try self.emitter.setcc(i.kind, .rax);
                         try self.emitter.movzx_reg_reg8(.rax, .rax);
                         try self.emitter.mov_reg_reg(reg, .rax);
-                        next_val += 1;
                     },
 
-                    .brif => |brif| {
-                        // don't want to corrupt registers if the condition isn't true or false
-                        // so jump to the correct label depending on condition to avoid this
+                    .brif => |i| {
                         const true_guard = try self.emitter.label();
                         const false_guard = try self.emitter.label();
-
-                        const condition = regalloc.get(brif.condition) orelse try regalloc.reload(brif.condition);
+                        const condition = regalloc.get(i.condition) orelse try regalloc.reload(i.condition);
 
                         try self.emitter.cmp_reg_imm32(condition, 0);
                         try self.emitter.jnz(true_guard);
 
                         try self.emitter.bind(false_guard);
-                        if (brif.false_args.len > 0) {
-                            for (brif.false_args, 0..) |arg, arg_idx| {
-                                // a really simple move of the jmp arg regs to block arg regs.
-                                const target_reg = arg_registers[arg_idx];
-                                const src_reg = regalloc.get(arg) orelse try regalloc.reload(arg);
-                                try self.emitter.mov_reg_reg(target_reg, src_reg);
-                            }
-                        }
-                        try self.emitter.jmp(labels.items[brif.false_block]);
-
-                        try self.emitter.bind(true_guard);
-                        if (brif.true_args.len > 0) {
-                            for (brif.true_args, 0..) |arg, arg_idx| {
-                                // a really simple move of the jmp arg regs to block arg regs.
-                                const target_reg = arg_registers[arg_idx];
-                                const src_reg = regalloc.get(arg) orelse try regalloc.reload(arg);
-                                try self.emitter.mov_reg_reg(target_reg, src_reg);
-                            }
-                        }
-                        try self.emitter.jmp(labels.items[brif.true_block]);
-                    },
-
-                    .jmp => |jmp| {
-                        for (jmp.args, 0..) |arg, arg_idx| {
-                            // a really simple move of the jmp arg regs to block arg regs.
-                            const target_reg = arg_registers[arg_idx];
+                        for (i.false_args, 0..) |arg, arg_idx| {
+                            const target_reg = ARG_REGISTERS[arg_idx];
                             const src_reg = regalloc.get(arg) orelse try regalloc.reload(arg);
                             try self.emitter.mov_reg_reg(target_reg, src_reg);
                         }
+                        try self.emitter.jmp(labels.items[i.false_block]);
 
-                        try self.emitter.jmp(labels.items[jmp.to_block]);
+                        try self.emitter.bind(true_guard);
+                        for (i.true_args, 0..) |arg, arg_idx| {
+                            const target_reg = ARG_REGISTERS[arg_idx];
+                            const src_reg = regalloc.get(arg) orelse try regalloc.reload(arg);
+                            try self.emitter.mov_reg_reg(target_reg, src_reg);
+                        }
+                        try self.emitter.jmp(labels.items[i.true_block]);
                     },
 
-                    .ret => |r| {
-                        const val = regalloc.get(r.value) orelse try regalloc.reload(r.value);
-                        try self.emitter.mov_reg_reg(.rax, val);
-                        if (frames_needed) try self.emitter.leave();
+                    .jmp => |i| {
+                        for (i.args, 0..) |arg, arg_idx| {
+                            const target_reg = ARG_REGISTERS[arg_idx];
+                            const src_reg = regalloc.get(arg) orelse try regalloc.reload(arg);
+                            try self.emitter.mov_reg_reg(target_reg, src_reg);
+                        }
+                        try self.emitter.jmp(labels.items[i.to_block]);
+                    },
+
+                    .ret => |i| {
+                        const value = regalloc.get(i.value) orelse try regalloc.reload(i.value);
+
+                        try self.emitter.mov_reg_reg(.rax, value);
+                        std.debug.print("ucr_count = {d}\n", .{ucr_count});
+                        std.debug.print("frames_needed = {any}\n", .{frames_needed});
+                        if (ucr_count > 0) {
+                            var pop_count = ucr_count;
+                            while (pop_count > 0) : (pop_count -= 1) {
+                                try self.emitter.pop(used_callee_regs[pop_count - 1]);
+                            }
+                        }
+
+                        if (frames_needed) {
+                            try self.emitter.leave();
+                        }
                         try self.emitter.ret();
                     },
                 }
 
                 inst_idx += 1;
 
-                var iter = live_ranges.iterator();
-                while (iter.next()) |e| {
-                    if (e.value_ptr.end == inst_idx - 1) {
-                        try regalloc.free(e.value_ptr.value);
+                var live_iter = live_ranges.iterator();
+                while (live_iter.next()) |*e| {
+                    std.debug.print("emission free, value = {d}, end = {d}, inst_idx = {d}\n", .{
+                        e.value_ptr.value,
+                        e.value_ptr.end,
+                        inst_idx,
+                    });
+
+                    if (e.*.value_ptr.end == inst_idx - 1) {
+                        try regalloc.free(e.*.value_ptr.value);
                     }
                 }
             }
         }
+
+        var patch_pos = prologue;
+        for (used_callee_regs) |reg| {
+            const bytes = if (reg.ext())
+                &[_]u8{ encode.rex(false, .rax, reg), 0xFF, 0xC0 | (6 << 3) | @as(u8, reg.enc()) }
+            else
+                &[_]u8{ 0xFF, 0xC0 | (6 << 3) | @as(u8, reg.enc()) };
+
+            try self.emitter.patchAt(patch_pos, bytes);
+            patch_pos += bytes.len;
+        }
+
+        std.debug.print("prologue: {d}\n", .{prologue});
+
+        std.debug.print("entry bytes: ", .{});
+        for (self.emitter.buffer.mem[0..32]) |byte| {
+            std.debug.print("0x{x}, ", .{byte});
+        }
+        std.debug.print("\n", .{});
+
+        const entry_ptr: *const anyopaque = @ptrCast(&self.emitter.buffer.mem[prologue]);
+        try mod.functions.put(func_idx, entry_ptr);
     }
 };

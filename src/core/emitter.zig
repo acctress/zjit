@@ -68,6 +68,16 @@ pub const Emitter = struct {
         }
     }
 
+    pub fn nop(self: *Emitter, count: u32) !void {
+        for (0..count) |_| try self.buffer.writeByte(0x90);
+    }
+
+    pub fn patchAt(self: *Emitter, pos: usize, bytes: []const u8) !void {
+        for (bytes, 0..) |byte, i| {
+            self.buffer.mem[pos + i] = byte;
+        }
+    }
+
     pub fn mov_reg_imm64(self: *Emitter, reg: Register, imm: i64) !void {
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, .rax, reg),
@@ -78,6 +88,8 @@ pub const Emitter = struct {
     }
 
     pub fn mov_reg_reg(self: *Emitter, dest: Register, src: Register) !void {
+        std.debug.print("mov reg reg {x}\n", .{encode.rex(true, src, dest)});
+
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x89,

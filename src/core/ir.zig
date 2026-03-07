@@ -27,11 +27,11 @@ pub const IR = struct {
     };
 
     pub const Inst = union(InstType) {
-        iconst: i64,
-        iadd: struct { lhs: Value, rhs: Value },
-        isub: struct { lhs: Value, rhs: Value },
-        imul: struct { lhs: Value, rhs: Value },
-        icmp: struct { kind: SetCCKind, lhs: Value, rhs: Value },
+        iconst: struct { result: Value, constant: i64 },
+        iadd: struct { result: Value, lhs: Value, rhs: Value },
+        isub: struct { result: Value, lhs: Value, rhs: Value },
+        imul: struct { result: Value, lhs: Value, rhs: Value },
+        icmp: struct { result: Value, kind: SetCCKind, lhs: Value, rhs: Value },
         brif: struct {
             condition: Value,
             true_block: usize,
@@ -56,23 +56,66 @@ pub const IR = struct {
         }
     };
 
-    pub const Function = struct {
+    pub const Module = struct {
         allocator: std.mem.Allocator,
-        blocks: std.ArrayList(BasicBlock),
-        types: std.ArrayList(Type),
-        param_indices: std.ArrayList([]u32),
+        functions: std.ArrayList(Function),
 
-        pub fn init(allocator: std.mem.Allocator) !Function {
+        pub fn init(allocator: std.mem.Allocator) Module {
             return .{
                 .allocator = allocator,
+                .functions = .empty,
+            };
+        }
+
+        pub fn deinit(self: *Module) void {
+            for (self.functions.items) |*f| {
+                f.deinit();
+            }
+
+            self.functions.deinit(self.allocator);
+        }
+
+        pub fn createFunction(self: *Module, name: []const u8, params: []const Type, return_type: Type) !*Function {
+            const func: Function = try .init(
+                self.allocator,
+                name,
+                params,
+                return_type,
+            );
+
+            try self.functions.append(self.allocator, func);
+
+            return &self.functions.items[self.functions.items.len - 1];
+        }
+
+        pub fn getFunction(self: *Module, idx: usize) *Function {
+            return &self.functions.items[idx];
+        }
+    };
+
+    pub const Function = struct {
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        params: []const Type,
+        param_indices: std.ArrayList([]u32),
+        return_type: Type,
+        types: std.ArrayList(Type),
+        blocks: std.ArrayList(BasicBlock),
+
+        pub fn init(allocator: std.mem.Allocator, name: []const u8, params: []const Type, return_type: Type) !Function {
+            return .{
+                .allocator = allocator,
+                .name = name,
+                .params = params,
+                .param_indices = .empty,
+                .return_type = return_type,
                 .blocks = .empty,
                 .types = .empty,
-                .param_indices = .empty,
             };
         }
 
         pub fn deinit(self: *Function) void {
-            for (self.blocks.items) |b| {
+            for (self.blocks.items) |*b| {
                 b.instructions.deinit(self.allocator);
             }
 
@@ -107,7 +150,12 @@ pub const IR = struct {
         }
 
         pub fn iconst(self: *Function, imm: i64) !u32 {
-            const inst: Inst = .{ .iconst = imm };
+            const inst: Inst = .{
+                .iconst = .{
+                    .result = @as(u32, @intCast(self.types.items.len)),
+                    .constant = imm,
+                },
+            };
 
             try self.blocks.items[
                 self.blocks.items.len - 1
@@ -120,6 +168,7 @@ pub const IR = struct {
 
         pub fn iadd(self: *Function, lhs: Value, rhs: Value) !u32 {
             const inst: Inst = .{ .iadd = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
                 .lhs = lhs,
                 .rhs = rhs,
             } };
@@ -135,6 +184,7 @@ pub const IR = struct {
 
         pub fn isub(self: *Function, lhs: Value, rhs: Value) !u32 {
             const inst: Inst = .{ .isub = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
                 .lhs = lhs,
                 .rhs = rhs,
             } };
@@ -150,6 +200,7 @@ pub const IR = struct {
 
         pub fn imul(self: *Function, lhs: Value, rhs: Value) !u32 {
             const inst: Inst = .{ .imul = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
                 .lhs = lhs,
                 .rhs = rhs,
             } };
@@ -165,6 +216,7 @@ pub const IR = struct {
 
         pub fn icmp(self: *Function, kind: SetCCKind, lhs: Value, rhs: Value) !u32 {
             const inst: Inst = .{ .icmp = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
                 .kind = kind,
                 .lhs = lhs,
                 .rhs = rhs,

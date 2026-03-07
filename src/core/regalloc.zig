@@ -54,6 +54,10 @@ pub const RegAlloc = struct {
     }
 
     pub fn walk(self: *RegAlloc, func: *IR.Function, arg_registers: []const Register) !void {
+        for (func.args.items, 0..) |arg, idx| {
+            _ = try self.alloc(arg, arg_registers[idx]);
+        }
+
         for (func.blocks.items, 0..) |block, block_idx| {
             for (block.parameters, 0..) |_, param_idx| {
                 // var live_iter = self.live_ranges.iterator();

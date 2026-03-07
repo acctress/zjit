@@ -72,6 +72,34 @@ int is_nonzero(int n) {
 ```
 
 zjit IR:
+
+New and improved IR Syntax:
+```zig
+var module: IR.Module = .init(allocator);
+defer module.deinit();
+
+{
+    const adder = try module.createFunction(
+        "add",
+        &[_]IR.Type{ .i64, .i64 },
+        .i64,
+    );
+
+    const arg1 = adder.getArg(0).?;
+    const arg2 = adder.getArg(1).?;
+    const result = try adder.iadd(arg1, arg2);
+    try adder.ret(result);
+}
+
+var code_gen: CodeGen = .init(allocator, &emitter);
+var compiled_module = try code_gen.compileModule(module);
+
+const func = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
+std.debug.print("f: {?}\n", .{func});
+```
+
+Old Syntax:
+
 ```zig
 var function: IR.Function = try .init(allocator);
 

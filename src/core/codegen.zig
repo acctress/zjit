@@ -100,8 +100,19 @@ pub const CodeGen = struct {
     /// Compute the lifetimes of registers being used by have a range of usage, when it reaches it's end it's register is usable, cleaned up.
     fn computeLiveRanges(self: *CodeGen, func: *const IR.Function) !std.AutoHashMap(u32, LiveRange) {
         var live_ranges: std.AutoHashMap(u32, LiveRange) = .init(self.allocator);
-
         var instruction_idx: u32 = 0;
+
+        for (func.args.items) |arg_v| {
+            try live_ranges.put(arg_v, LiveRange{
+                .start = instruction_idx,
+                .end = 0,
+                .value = arg_v,
+                .expired = false,
+            });
+
+            instruction_idx += 1;
+        }
+
         for (func.blocks.items, 0..) |block, block_idx| {
             for (block.parameters, 0..) |_, p_idx| {
                 const vidx = func.param_indices.items[block_idx][p_idx];
@@ -131,6 +142,10 @@ pub const CodeGen = struct {
         }
 
         instruction_idx = 0;
+
+        for (func.args.items) |_| {
+            instruction_idx += 1;
+        }
 
         // compute the end time now, it will always be instruction_idx
         // ensure to add these checks for instructions which use values

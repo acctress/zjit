@@ -48,14 +48,6 @@ pub const IR = struct {
         instructions: std.ArrayList(Inst),
     };
 
-    pub const Block = struct {
-        params: []u32,
-
-        pub fn param(self: Block, idx: usize) u32 {
-            return self.params[idx];
-        }
-    };
-
     pub const Module = struct {
         allocator: std.mem.Allocator,
         functions: std.ArrayList(Function),
@@ -76,16 +68,24 @@ pub const IR = struct {
         }
 
         pub fn createFunction(self: *Module, name: []const u8, params: []const Type, return_type: Type) !*Function {
-            const func: Function = try .init(
+            var func: Function = try .init(
                 self.allocator,
                 name,
                 params,
                 return_type,
             );
 
+            for (params) |param| {
+                try func.types.append(self.allocator, param);
+                try func.args.append(self.allocator, @as(Value, @intCast(func.types.items.len - 1)));
+            }
+
             try self.functions.append(self.allocator, func);
 
-            return &self.functions.items[self.functions.items.len - 1];
+            var fptr: *Function = @constCast(&self.functions.items[self.functions.items.len - 1]);
+            _ = try fptr.createBlock(IR.no_types);
+
+            return fptr;
         }
 
         pub fn getFunction(self: *Module, idx: usize) *Function {
@@ -96,6 +96,7 @@ pub const IR = struct {
     pub const Function = struct {
         allocator: std.mem.Allocator,
         name: []const u8,
+        args: std.ArrayList(u32),
         params: []const Type,
         param_indices: std.ArrayList([]u32),
         return_type: Type,
@@ -106,6 +107,7 @@ pub const IR = struct {
             return .{
                 .allocator = allocator,
                 .name = name,
+                .args = .empty,
                 .params = params,
                 .param_indices = .empty,
                 .return_type = return_type,
@@ -127,7 +129,11 @@ pub const IR = struct {
             self.types.deinit(self.allocator);
         }
 
-        pub fn createBlock(self: *Function, params: []const Type) !Block {
+        pub fn getArg(self: *Function, idx: usize) ?Value {
+            return self.args.items[idx];
+        }
+
+        pub fn createBlock(self: *Function, params: []const Type) !*BasicBlock {
             const block: BasicBlock = .{
                 .instructions = .empty,
                 .parameters = params,
@@ -144,9 +150,7 @@ pub const IR = struct {
 
             try self.blocks.append(self.allocator, block);
 
-            return .{
-                .params = owned,
-            };
+            return &self.blocks.items[self.blocks.items.len - 1];
         }
 
         pub fn iconst(self: *Function, imm: i64) !u32 {

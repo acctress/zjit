@@ -495,7 +495,7 @@ test "module with an adder function IR test" {
     var code_gen: CodeGen = .init(allocator, &emitter);
     var compiled_module = try code_gen.compileModule(module);
 
-    const f = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
+    const f = compiled_module.getFunction("add", *const fn (i64, i64) callconv(.c) i64).?;
     std.debug.print("f: {?}\n", .{f});
 
     try std.testing.expectEqual(3, f(1, 2));
@@ -528,7 +528,7 @@ test "module with a simple divider function IR test" {
     var code_gen: CodeGen = .init(allocator, &emitter);
     var compiled_module = try code_gen.compileModule(module);
 
-    const f = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
+    const f = compiled_module.getFunction("div", *const fn (i64, i64) callconv(.c) i64).?;
     std.debug.print("f: {?}\n", .{f});
 
     try std.testing.expectEqual(5, f(10, 2));

@@ -4,16 +4,12 @@ const SetCCKind = @import("emitter.zig").SetCCKind;
 pub const IR = struct {
     pub const Value = u32;
 
-    pub const no_args: []const Value = &[_]Value{};
-
     pub const Type = enum {
         i64,
         i32,
         bool,
         ptr,
     };
-
-    pub const no_types: []const Type = &[_]Type{};
 
     pub const InstType = enum {
         iconst,
@@ -26,6 +22,9 @@ pub const IR = struct {
         jmp,
         ret,
     };
+
+    pub const no_args: []const Value = &[_]Value{};
+    pub const no_types: []const Type = &[_]Type{};
 
     pub const Inst = union(InstType) {
         iconst: struct { result: Value, constant: i64 },

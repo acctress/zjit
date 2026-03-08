@@ -21,7 +21,7 @@ else
 
 pub const GenModule = struct {
     allocator: std.mem.Allocator,
-    functions: std.AutoHashMap(usize, *const anyopaque),
+    functions: std.StringHashMap(*const anyopaque),
 
     pub fn init(allocator: std.mem.Allocator) GenModule {
         return .{
@@ -34,9 +34,10 @@ pub const GenModule = struct {
         self.functions.deinit();
     }
 
-    pub fn getFunction(self: *GenModule, idx: usize, comptime Fn: type) ?Fn {
-        if (self.functions.contains(idx))
-            return @ptrCast(self.functions.get(idx).?);
+    pub fn getFunction(self: *GenModule, symbol: []const u8, comptime Fn: type) ?Fn {
+        std.debug.print("self.functions.contains(symbol) = {any}\n", .{self.functions.contains(symbol)});
+        if (self.functions.contains(symbol))
+            return @ptrCast(self.functions.get(symbol).?);
         return null;
     }
 };
@@ -207,8 +208,8 @@ pub const CodeGen = struct {
     pub fn compileModule(self: *CodeGen, module: IR.Module) !GenModule {
         var mod: GenModule = .init(self.allocator);
 
-        for (module.functions.items, 0..) |*func, func_idx| {
-            try self.compileFunction(func, &mod, func_idx);
+        for (module.functions.items) |*func| {
+            try self.compileFunction(func, &mod, func.name);
         }
 
         _ = try self.emitter.buffer.commit(*const anyopaque);
@@ -229,7 +230,7 @@ pub const CodeGen = struct {
         return error.ValueNotFound;
     }
 
-    fn compileFunction(self: *CodeGen, func: *IR.Function, mod: *GenModule, func_idx: usize) !void {
+    fn compileFunction(self: *CodeGen, func: *IR.Function, mod: *GenModule, symbol: []const u8) !void {
         // first pass, essentially pre allocate registers, calculate life times, and check if we need frames
         const live_ranges = try self.computeLiveRanges(func);
         const peak_live = try self.computeMaximumLive(live_ranges);
@@ -410,6 +411,6 @@ pub const CodeGen = struct {
         }
 
         const entry_ptr: *const anyopaque = @ptrCast(&self.emitter.buffer.mem[prologue]);
-        try mod.functions.put(func_idx, entry_ptr);
+        try mod.functions.put(symbol, entry_ptr);
     }
 };

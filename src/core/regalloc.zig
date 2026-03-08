@@ -87,6 +87,7 @@ pub const RegAlloc = struct {
                     .imul => |i| _ = try self.alloc(i.result, null),
                     .idiv => |i| _ = try self.alloc(i.result, null),
                     .icmp => |i| _ = try self.alloc(i.result, null),
+                    .call => |i| _ = try self.alloc(i.result, null),
                 }
 
                 // self.instruction_idx += 1;

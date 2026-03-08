@@ -533,3 +533,45 @@ test "module with a simple divider function IR test" {
 
     try std.testing.expectEqual(5, f(10, 2));
 }
+
+test "module with two functions, one calls the other" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var module: IR.Module = .init(allocator);
+    defer module.deinit();
+
+    {
+        const foo = try module.createFunction(
+            "foo",
+            &[_]IR.Type{.i64},
+            .i64,
+        );
+
+        const fooArg1 = foo.getArg(0).?;
+        const fooResult = try foo.imul(fooArg1, try foo.iconst(2));
+        try foo.ret(fooResult);
+
+        const main = try module.createFunction(
+            "main",
+            &[_]IR.Type{.i64},
+            .i64,
+        );
+
+        const arg1 = main.getArg(0).?;
+        const result = try main.call(&[_]u32{arg1}, .{ .jit = "foo" });
+        try main.ret(result);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    var compiled_module = try code_gen.compileModule(module);
+
+    const f = compiled_module.getFunction("main", *const fn (i64) callconv(.c) i64).?;
+    std.debug.print("f: {?}\n", .{f});
+
+    try std.testing.expectEqual(10, f(5));
+}

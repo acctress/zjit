@@ -136,6 +136,7 @@ pub const CodeGen = struct {
                     .imul => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .idiv => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .icmp => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .call => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .brif, .jmp, .ret => {},
                 }
 
@@ -181,6 +182,10 @@ pub const CodeGen = struct {
                     .icmp => |cmp| {
                         live_ranges.getPtr(cmp.lhs).?.end = instruction_idx;
                         live_ranges.getPtr(cmp.rhs).?.end = instruction_idx;
+                    },
+
+                    .call => |call| {
+                        live_ranges.getPtr(call.result).?.end = instruction_idx;
                     },
 
                     .brif => |brif| {
@@ -333,6 +338,20 @@ pub const CodeGen = struct {
                         try self.emitter.cmp_reg_reg(lhs, rhs);
                         try self.emitter.setcc(i.kind, .rax);
                         try self.emitter.movzx_reg_reg8(.rax, .rax);
+                        try self.emitter.mov_reg_reg(reg, .rax);
+                    },
+
+                    .call => |i| {
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+
+                        switch (i.target) {
+                            .native => |n| try self.emitter.call(n),
+                            .jit => |n| {
+                                const ptr = mod.functions.get(n) orelse return error.FunctioNotFoundForCall;
+                                try self.emitter.call(ptr);
+                            },
+                        }
+
                         try self.emitter.mov_reg_reg(reg, .rax);
                     },
 

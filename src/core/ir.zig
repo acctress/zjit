@@ -18,6 +18,7 @@ pub const IR = struct {
         imul,
         idiv,
         icmp,
+        call,
         brif,
         jmp,
         ret,
@@ -26,6 +27,11 @@ pub const IR = struct {
     pub const no_args: []const Value = &[_]Value{};
     pub const no_types: []const Type = &[_]Type{};
 
+    pub const InstCallTarget = union(enum) {
+        native: *const anyopaque,
+        jit: []const u8,
+    };
+
     pub const Inst = union(InstType) {
         iconst: struct { result: Value, constant: i64 },
         iadd: struct { result: Value, lhs: Value, rhs: Value },
@@ -33,6 +39,7 @@ pub const IR = struct {
         imul: struct { result: Value, lhs: Value, rhs: Value },
         idiv: struct { result: Value, lhs: Value, rhs: Value },
         icmp: struct { result: Value, kind: SetCCKind, lhs: Value, rhs: Value },
+        call: struct { result: Value, args: []const Value, target: InstCallTarget },
         brif: struct {
             condition: Value,
             true_block: usize,
@@ -241,6 +248,26 @@ pub const IR = struct {
                 .kind = kind,
                 .lhs = lhs,
                 .rhs = rhs,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+
+            try self.types.append(self.allocator, .bool);
+
+            return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn call(
+            self: *Function,
+            args: []const Value,
+            target: InstCallTarget,
+        ) !Value {
+            const inst: Inst = .{ .call = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
+                .args = args,
+                .target = target,
             } };
 
             try self.blocks.items[

@@ -85,6 +85,7 @@ pub const RegAlloc = struct {
                     .iadd => |i| _ = try self.alloc(i.result, null),
                     .isub => |i| _ = try self.alloc(i.result, null),
                     .imul => |i| _ = try self.alloc(i.result, null),
+                    .idiv => |i| _ = try self.alloc(i.result, null),
                     .icmp => |i| _ = try self.alloc(i.result, null),
                 }
 

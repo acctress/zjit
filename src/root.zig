@@ -500,3 +500,36 @@ test "module with an adder function IR test" {
 
     try std.testing.expectEqual(3, f(1, 2));
 }
+
+test "module with a simple divider function IR test" {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var emitter: Emitter = try .init(allocator, 1024);
+    defer emitter.deinit();
+
+    var module: IR.Module = .init(allocator);
+    defer module.deinit();
+
+    {
+        const divider = try module.createFunction(
+            "div",
+            &[_]IR.Type{ .i64, .i64 },
+            .i64,
+        );
+
+        const arg1 = divider.getArg(0).?;
+        const arg2 = divider.getArg(1).?;
+        const result = try divider.idiv(arg1, arg2);
+        try divider.ret(result);
+    }
+
+    var code_gen: CodeGen = .init(allocator, &emitter);
+    var compiled_module = try code_gen.compileModule(module);
+
+    const f = compiled_module.getFunction(0, *const fn (i64, i64) callconv(.c) i64).?;
+    std.debug.print("f: {?}\n", .{f});
+
+    try std.testing.expectEqual(5, f(10, 2));
+}

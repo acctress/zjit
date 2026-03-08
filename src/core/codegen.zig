@@ -133,6 +133,7 @@ pub const CodeGen = struct {
                     .iadd => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .isub => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .imul => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .idiv => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .icmp => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
                     .brif, .jmp, .ret => {},
                 }
@@ -169,6 +170,11 @@ pub const CodeGen = struct {
                     .imul => |mul| {
                         live_ranges.getPtr(mul.lhs).?.end = instruction_idx;
                         live_ranges.getPtr(mul.rhs).?.end = instruction_idx;
+                    },
+
+                    .idiv => |div| {
+                        live_ranges.getPtr(div.lhs).?.end = instruction_idx;
+                        live_ranges.getPtr(div.rhs).?.end = instruction_idx;
                     },
 
                     .icmp => |cmp| {
@@ -300,6 +306,23 @@ pub const CodeGen = struct {
                         const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
                         try self.emitter.mov_reg_reg(reg, lhs);
                         try self.emitter.imul_reg_reg(reg, rhs);
+                    },
+
+                    .idiv => |i| {
+                        // const s = self.emitter.buffer.writePos;
+
+                        const reg = regalloc.get(i.result) orelse try regalloc.reload(i.result);
+                        const lhs = regalloc.get(i.lhs) orelse try regalloc.reload(i.lhs);
+                        const rhs = regalloc.get(i.rhs) orelse try regalloc.reload(i.rhs);
+                        try self.emitter.mov_reg_reg(.rax, lhs);
+                        try self.emitter.mov_reg_reg(.r11, rhs);
+                        try self.emitter.cqo();
+                        try self.emitter.idiv(.r11);
+                        try self.emitter.mov_reg_reg(reg, .rax);
+                        // for (self.emitter.buffer.mem[s..self.emitter.buffer.writePos]) |b| {
+                        //     std.debug.print("0x{x},", .{b});
+                        // }
+                        // std.debug.print("\n", .{});
                     },
 
                     .icmp => |i| {

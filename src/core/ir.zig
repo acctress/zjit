@@ -20,6 +20,7 @@ pub const IR = struct {
         iadd,
         isub,
         imul,
+        idiv,
         icmp,
         brif,
         jmp,
@@ -31,6 +32,7 @@ pub const IR = struct {
         iadd: struct { result: Value, lhs: Value, rhs: Value },
         isub: struct { result: Value, lhs: Value, rhs: Value },
         imul: struct { result: Value, lhs: Value, rhs: Value },
+        idiv: struct { result: Value, lhs: Value, rhs: Value },
         icmp: struct { result: Value, kind: SetCCKind, lhs: Value, rhs: Value },
         brif: struct {
             condition: Value,
@@ -204,6 +206,22 @@ pub const IR = struct {
 
         pub fn imul(self: *Function, lhs: Value, rhs: Value) !u32 {
             const inst: Inst = .{ .imul = .{
+                .result = @as(u32, @intCast(self.types.items.len)),
+                .lhs = lhs,
+                .rhs = rhs,
+            } };
+
+            try self.blocks.items[
+                self.blocks.items.len - 1
+            ].instructions.append(self.allocator, inst);
+
+            try self.types.append(self.allocator, .i64);
+
+            return @intCast(self.types.items.len - 1);
+        }
+
+        pub fn idiv(self: *Function, lhs: Value, rhs: Value) !u32 {
+            const inst: Inst = .{ .idiv = .{
                 .result = @as(u32, @intCast(self.types.items.len)),
                 .lhs = lhs,
                 .rhs = rhs,

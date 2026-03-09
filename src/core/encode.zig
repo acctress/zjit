@@ -1,5 +1,6 @@
 const regs = @import("regs.zig");
 const Register = regs.Register;
+const XmmRegister = regs.XmmRegister;
 
 pub const encode = struct {
     pub const REX_NO_OPS = 0x48; // hardcoded constant for rex with no operands

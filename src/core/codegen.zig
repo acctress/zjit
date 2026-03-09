@@ -43,15 +43,9 @@ pub const GenModule = struct {
 };
 
 pub const LiveRange = struct {
-    expired: bool,
     value: u32,
     start: usize,
     end: usize,
-};
-
-const Allocation = struct {
-    tag: enum { register, stack },
-    data: union { reg: Register, slot: i32 },
 };
 
 fn isCalleeRegister(reg: Register) bool {
@@ -108,7 +102,6 @@ pub const CodeGen = struct {
                 .start = instruction_idx,
                 .end = 0,
                 .value = arg_v,
-                .expired = false,
             });
 
             instruction_idx += 1;
@@ -122,7 +115,6 @@ pub const CodeGen = struct {
                     .start = instruction_idx,
                     .end = 0,
                     .value = vidx,
-                    .expired = false,
                 });
 
                 instruction_idx += 1;
@@ -130,13 +122,13 @@ pub const CodeGen = struct {
 
             for (block.instructions.items) |inst| {
                 switch (inst) {
-                    .iconst => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .iadd => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .isub => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .imul => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .idiv => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .icmp => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
-                    .call => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result, .expired = true }),
+                    .iconst => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .iadd => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .isub => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .imul => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .idiv => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .icmp => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
+                    .call => |i| try live_ranges.put(i.result, LiveRange{ .start = instruction_idx, .end = 0, .value = i.result }),
                     .brif, .jmp, .ret => {},
                 }
 

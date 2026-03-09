@@ -5,6 +5,7 @@ const encode = @import("encode.zig").encode;
 const builtin = @import("builtin");
 
 const Register = regs.Register;
+const XmmRegister = regs.XmmRegister;
 
 pub const Label = struct {
     target: ?usize,
@@ -91,6 +92,17 @@ pub const Emitter = struct {
         try self.buffer.writeBytes(&[_]u8{
             encode.rex(true, src, dest),
             0x89,
+            encode.modrm(src, dest),
+        });
+    }
+
+    pub fn movsd_reg_reg(self: *Emitter, dest: XmmRegister, src: XmmRegister) !void {
+        try self.buffer.writeByte(0xF2);
+        if (dest.ext() or src.ext())
+            try self.buffer.writeByte(encode.rex(true, src, dest));
+        try self.buffer.writeBytes(&[_]u8{
+            0x0F,
+            0x10,
             encode.modrm(src, dest),
         });
     }
